@@ -31,6 +31,40 @@ Sau khi tải xong, hãy đặt file `MalMem2022.csv` vào thư mục gốc củ
 
 *(Ghi chú: Các file Dataset dung lượng lớn và file model nặng đã được `.gitignore` để tránh phình to kích thước repository).*
 
+3. **Vẽ các biểu đồ EDA theo từng kịch bản:**
+   ```bash
+   pip install matplotlib seaborn
+   python3 generate_eda.py
+   ```
+   Ảnh được lưu trong thư mục `eda_figures/` (`Overview/`, `Scenario_1/`, `Scenario_2/`, `Scenario_3/`). Phân tích chi tiết: [EDA_Report.md](EDA_Report.md).
+
+---
+
+## 🔍 Phân Tích Dữ Liệu Khám Phá (EDA)
+
+### Kịch bản 1 – Nhị phân (Benign vs Malware)
+Dữ liệu cân bằng gần 50:50 (29.231 Benign / 28.831 Malware). Hai lớp tách biệt rõ trong không gian PCA, các đặc trưng như `dlllist.avg_dlls_per_proc` (r = -0.91) và `handles.nevent` (r = -0.88) phân biệt rất mạnh.
+
+| Phân phối lớp | PCA 2D |
+| :---: | :---: |
+| ![](eda_figures/Scenario_1/01_binary_class_distribution.png) | ![](eda_figures/Scenario_1/04_binary_pca_2d.png) |
+
+### Kịch bản 2 – 4 nhóm (Benign, Ransomware, Spyware, Trojan)
+3 nhóm mã độc có số mẫu gần bằng nhau (~9.500 mẫu mỗi nhóm) nhưng dấu vết bộ nhớ gần như giống hệt nhau, nên chồng lấn mạnh trong PCA.
+
+| Dấu vết hành vi (Z-score) | PCA 2D |
+| :---: | :---: |
+| ![](eda_figures/Scenario_2/02_multi4_behavioral_fingerprint_heatmap.png) | ![](eda_figures/Scenario_2/04_multi4_pca_2d.png) |
+
+### Kịch bản 3 – 16 lớp (Benign + 15 họ mã độc)
+Mỗi họ có ~1.400–2.400 mẫu. Khi gom cụm phân cấp, phần lớn các họ có profile rất giống nhau và không gom theo nhóm cha, nên đây là kịch bản khó nhất.
+
+| Phân phối 16 lớp | Gom cụm 15 họ mã độc |
+| :---: | :---: |
+| ![](eda_figures/Scenario_3/01_multi16_family_distribution.png) | ![](eda_figures/Scenario_3/03_multi16_hierarchical_clustering.png) |
+
+![Độ phức tạp vs hiệu suất](eda_figures/Overview/02_cross_scenario_complexity_summary.png)
+
 ---
 
 ## 📊 Kết Quả Thực Nghiệm (Tái hiện)
