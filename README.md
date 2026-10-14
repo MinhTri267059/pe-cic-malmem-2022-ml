@@ -12,12 +12,12 @@ Sau khi tải xong, hãy đặt file `MalMem2022.csv` vào thư mục gốc củ
 ## 🚀 Hướng dẫn Sử dụng
 
 1. **Cài đặt thư viện yêu cầu:**
-   Bạn cần cài đặt các thư viện Python như `pandas`, `scikit-learn`, và `xgboost`.
+   Bạn cần cài đặt các thư viện Python:
    ```bash
-   pip install pandas numpy scikit-learn xgboost joblib
+   pip install pandas numpy scikit-learn xgboost lightgbm catboost joblib matplotlib seaborn
    ```
 
-2. **Chạy kịch bản thực nghiệm:**
+2. **Chạy kịch bản thực nghiệm tái hiện bài báo (5 mô hình gốc):**
    Đảm bảo file `MalMem2022.csv` đã nằm trong thư mục gốc. Chạy lệnh sau:
    ```bash
    python3 reproduce_experiment.py
@@ -29,14 +29,19 @@ Sau khi tải xong, hãy đặt file `MalMem2022.csv` vào thư mục gốc củ
    - Lưu trữ trọng số mô hình đã huấn luyện (file `.pkl`) và tham số (file `.json`) vào thư mục `Models/`.
    - Xuất bảng chỉ số đánh giá ra các file `Metrics_Scenario_*.csv`.
 
-*(Ghi chú: Các file Dataset dung lượng lớn và file model nặng đã được `.gitignore` để tránh phình to kích thước repository).*
-
-3. **Vẽ các biểu đồ EDA theo từng kịch bản:**
+3. **Vẽ các biểu đồ phân tích khám phá dữ liệu (EDA) theo từng kịch bản:**
    ```bash
-   pip install matplotlib seaborn
    python3 generate_eda.py
    ```
    Ảnh được lưu trong thư mục `eda_figures/` (`Overview/`, `Scenario_1/`, `Scenario_2/`, `Scenario_3/`). Phân tích chi tiết: [EDA_Report.md](EDA_Report.md).
+
+4. **Chạy thực nghiệm cải tiến nâng cao độ chính xác (Phương án 1, 2, 3):**
+   ```bash
+   python3 improve_experiment.py
+   ```
+   Tự động huấn luyện, tối ưu hóa siêu tham số (Tuning), thử nghiệm mô hình mới (LightGBM, ExtraTrees, CatBoost) và kết hợp đa mô hình (Soft Voting, Stacking Classifier), lưu kết quả vào `Improvement_Scenario_2.csv` và `Improvement_Scenario_3.csv`.
+
+*(Ghi chú: Các file Dataset dung lượng lớn và file model nặng đã được `.gitignore` để tránh phình to kích thước repository).*
 
 ---
 
