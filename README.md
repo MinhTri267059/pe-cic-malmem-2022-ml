@@ -132,3 +132,47 @@ Dưới đây là phần đối chiếu độ chính xác (Accuracy) đạt đư
 | **Naive Bayes (NB)** | 10-Fold CV | 56.99% - 57.17% | 56.83% | ~ - 0.16% |
 
 > **Nhận xét:** Quá trình tái hiện đã thành công xuất sắc. Ở những kịch bản phân loại sâu phức tạp (16 lớp), mã mô phỏng bằng Python thậm chí đạt độ chính xác **nhỉnh hơn bài báo gốc gần 1%** ở thuật toán XGBoost và Random Forest.
+
+---
+
+## 🚀 Thực Nghiệm Nâng Cao: Cải Thiện Độ Chính Xác (Phương Án 1, 2, 3)
+
+Để giải quyết bài toán suy giảm độ chính xác ở **Kịch bản 2 (4 nhóm)** và **Kịch bản 3 (16 lớp)**, 3 phương án tối ưu hóa đã được thực thi và so sánh trên cùng tập test phân tầng (Stratified 80/20):
+
+* **Phương án 1 (Hyperparameter Tuning):** Tinh chỉnh chiều sâu cây (`max_depth`), `learning_rate`, tỷ lệ chọn mẫu (`subsample`, `colsample_bytree`) và hệ số chính quy hóa L1/L2 (`reg_alpha`, `reg_lambda`) để chống hiện tượng overfitting.
+* **Phương án 2 (Mô hình mới):** Thử nghiệm các thuật toán hiện đại gồm **Extra Trees** (cây ngẫu nhiên hóa giảm phương sai), **LightGBM** (thuật toán boosting phân nhánh theo lá - leaf-wise), và **CatBoost**.
+* **Phương án 3 (Ensemble & Stacking):** Kết hợp các bộ phân loại đa dạng thông qua **Soft Voting Ensemble** và **Stacking Classifier** (sử dụng Logistic Regression làm Meta-Learner trên xác suất dự đoán của các mô hình cơ sở).
+
+![So sánh cải thiện](eda_figures/Overview/03_improvement_benchmark_comparison.png)
+
+### 📊 Bảng Đối Chiếu Kết Quả Kịch Bản 2 (4 Nhóm Lớp)
+
+| Mô hình | Phương án | Accuracy | Macro-F1 | Mức tăng Acc (Delta) | Mức tăng F1 (Delta) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **XGBoost (Default)** | *Baseline* | 87.31% | 80.76% | - | - |
+| **Random Forest (Default)** | *Baseline* | 87.02% | 80.38% | - 0.28% | - 0.39% |
+| **Tuned XGBoost** | **Phương án 1** | **88.30%** | **82.27%** | **+ 0.99%** | **+ 1.50%** |
+| **Tuned Random Forest** | **Phương án 1** | 87.17% | 80.60% | - 0.14% | - 0.16% |
+| **Extra Trees** | **Phương án 2** | 85.21% | 77.67% | - 2.09% | - 3.09% |
+| **LightGBM** | **Phương án 2** | **88.37%** | **82.37%** | **+ 1.06%** | **+ 1.61%** |
+| **CatBoost** | **Phương án 2** | 84.85% | 77.08% | - 2.45% | - 3.69% |
+| **Soft Voting Ensemble** | **Phương án 3** | **88.25%** | **82.20%** | **+ 0.94%** | **+ 1.44%** |
+| **Stacking Ensemble (Meta-LR)** | **Phương án 3** | **88.50%** | **82.58%** | **+ 1.19%** | **+ 1.81%** |
+
+### 📊 Bảng Đối Chiếu Kết Quả Kịch Bản 3 (16 Lớp Họ Mã Độc)
+
+| Mô hình | Phương án | Accuracy | Macro-F1 | Mức tăng Acc (Delta) | Mức tăng F1 (Delta) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **XGBoost (Default)** | *Baseline* | 75.57% | 53.78% | - | - |
+| **Random Forest (Default)** | *Baseline* | 74.83% | 52.60% | - 0.74% | - 1.18% |
+| **Tuned XGBoost** | **Phương án 1** | **76.05%** | **54.86%** | **+ 0.48%** | **+ 1.08%** |
+| **Tuned Random Forest** | **Phương án 1** | 75.13% | 52.98% | - 0.44% | - 0.80% |
+| **Extra Trees** | **Phương án 2** | 74.11% | 50.91% | - 1.46% | - 2.87% |
+| **LightGBM** | **Phương án 2** | **75.99%** | **55.04%** | **+ 0.42%** | **+ 1.27%** |
+| **CatBoost** | **Phương án 2** | 71.96% | 46.37% | - 3.61% | - 7.41% |
+| **Soft Voting Ensemble** | **Phương án 3** | **76.22%** | **55.23%** | **+ 0.65%** | **+ 1.45%** |
+| **Stacking Ensemble (Meta-LR)** | **Phương án 3** | **76.23%** | **55.33%** | **+ 0.66%** | **+ 1.55%** |
+
+> **Kết luận thực nghiệm cải tiến:**
+> 1. **Stacking Ensemble (Phương án 3)** và **LightGBM (Phương án 2)** mang lại hiệu năng cao nhất trên cả hai kịch bản, giúp đẩy độ chính xác Kịch bản 2 lên tới **88.50%** (tăng +1.19% so với XGBoost mặc định) và Kịch bản 3 lên **76.23%** (+0.66%).
+> 2. Đáng chú ý, chỉ số **Macro-F1** (đo lường độ chính xác trung bình trên các họ mã độc thiểu số) được cải thiện rõ rệt: tăng **+1.81%** ở Kịch bản 2 và **+1.55%** ở Kịch bản 3, chứng minh mô hình phân biệt tốt hơn đối với các lớp mã độc khó.
