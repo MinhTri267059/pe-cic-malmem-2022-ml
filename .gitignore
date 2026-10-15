@@ -3,3 +3,4 @@ MalMem2022.csv
 Dataset_*.csv
 .DS_Store
 catboost_info/
+.vagrant/

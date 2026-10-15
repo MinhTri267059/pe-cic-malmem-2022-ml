@@ -45,6 +45,22 @@ Sau khi tải xong, hãy đặt file `MalMem2022.csv` vào thư mục gốc củ
 
 ---
 
+## 🧪 Môi Trường Lab Ảo Hóa Phân Tích Mã Độc (Vagrant & VirtualBox)
+
+Để tạo lập dữ liệu hoặc phân tích động các mẫu mã độc PE trong môi trường an toàn, repository cung cấp cấu hình Sandbox sẵn sàng hoạt động trong thư mục `lab/`:
+- **Hạ tầng:** Tự động hóa bằng [Vagrant](https://www.vagrantup.com/) trên nền tảng ảo hóa [Oracle VirtualBox](https://www.virtualbox.org/).
+- **Hệ điều hành máy ảo (Guest VM):** Windows 10 x64 (`Win10_Malware_Mem_Demo`).
+- **Cơ chế an toàn (Hardened Isolation):** Đã vô hiệu hóa hoàn toàn Shared Folders, Clipboard hai chiều, Kéo thả tệp (Drag & Drop) và các cổng giao tiếp USB/Serial/LPT nhằm loại trừ nguy cơ mã độc lây lan ngược ra máy thật (Host).
+- **Chu trình phân tích bộ nhớ:**
+  1. Chạy máy ảo từ Clean Snapshot: `cd lab && vagrant up`
+  2. Thực thi mẫu PE mã độc.
+  3. Trích xuất ảnh chụp RAM: `VBoxManage debugvm "Win10_Malware_Mem_Demo" dumpvmcore --filename malware.raw`
+  4. Dùng **Volatility 3** trích xuất 55 đặc trưng tương thích định dạng CIC-MalMem-2022.
+
+👉 Xem toàn bộ hướng dẫn cài đặt, cấu hình, quản lý snapshot và khắc phục sự cố tại: 🔗 **[lab/README.md](lab/README.md)**
+
+---
+
 ## 🔍 Phân Tích Dữ Liệu Khám Phá (EDA)
 
 ### Kịch bản 1 – Nhị phân (Benign vs Malware)
