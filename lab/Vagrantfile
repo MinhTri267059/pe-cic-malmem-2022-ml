@@ -1,7 +1,15 @@
 Vagrant.configure("2") do |config|
   config.vm.box = ENV.fetch("WINDOWS_BOX", "StefanScherer/windows_10")
   config.vm.box_version = ENV.fetch("WINDOWS_BOX_VERSION", "2020.05.27")
-  config.vm.communicator = "winrm"
+  # This VM intentionally has no guest-to-host or guest-to-network channel.
+  # Do not switch this back to WinRM unless the VM is not executing malware.
+  config.vm.communicator = "none"
+
+  # The base box declares an RDP forward and Vagrant otherwise adds an SSH
+  # forward automatically. Keep both disabled before the VM is created.
+  config.vm.network "forwarded_port", guest: 3389, host: 3389, id: "rdp", disabled: true
+  config.vm.network "forwarded_port", guest: 22, host: 2222, id: "ssh", disabled: true
+
   config.vm.box_check_update = false
   config.vm.synced_folder ".", "/vagrant", disabled: true
   config.vm.boot_timeout = 700
@@ -10,11 +18,17 @@ Vagrant.configure("2") do |config|
     vb.gui = true
     vb.memory = 2048
     vb.cpus = 2
+    # VirtualBox normally creates adapter 1 as NAT, even if no Vagrant
+    # network is declared. Disable every virtual NIC explicitly.
+    (1..8).each { |adapter| vb.customize ["modifyvm", :id, "--nic#{adapter}", "none"] }
+
+    # Disable host-facing peripherals and remote-access facilities.
     vb.customize ["modifyvm", :id, "--clipboard-mode", "disabled"]
     vb.customize ["modifyvm", :id, "--clipboard-file-transfers", "disabled"]
     vb.customize ["modifyvm", :id, "--drag-and-drop", "disabled"]
     vb.customize ["modifyvm", :id, "--vrde", "off"]
-    vb.customize ["modifyvm", :id, "--usb-ohci", "off", "--usb-ehci", "off", "--usb-xhci", "off"]
+    vb.customize ["modifyvm", :id, "--audio", "none"]
+    vb.customize ["modifyvm", :id, "--usb", "off", "--usb-ohci", "off", "--usb-ehci", "off", "--usb-xhci", "off"]
     (1..4).each { |port| vb.customize ["modifyvm", :id, "--uart#{port}", "off"] }
     (1..2).each { |port| vb.customize ["modifyvm", :id, "--lpt#{port}", "off"] }
   end

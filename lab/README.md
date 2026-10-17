@@ -1,10 +1,21 @@
 # 🧪 Phòng Thí Nghiệm Ảo Hóa Phân Tích Mã Độc Bộ Nhớ (Malware Memory Analysis Lab)
 
-Môi trường phòng thí nghiệm ảo hóa này được xây dựng bằng **Vagrant** và **Oracle VirtualBox** nhằm tái hiện quy trình thu thập dữ liệu bộ nhớ của tập dữ liệu **CIC-MalMem-2022** (*MalMemAnalysis-2022*). Phòng lab cung cấp một sandbox Windows 10 cô lập an toàn để thực thi mẫu mã độc PE, trích xuất RAM dump định kỳ và trích xuất đặc trưng bằng **Volatility / VolMemLyzer**.
+Môi trường phòng thí nghiệm ảo hóa này được xây dựng bằng **Vagrant** và **Oracle VirtualBox** nhằm tái hiện quy trình thu thập dữ liệu bộ nhớ của tập dữ liệu **CIC-MalMem-2022** (*MalMemAnalysis-2022*). Phòng lab cung cấp một sandbox Windows 10 đã giảm tối đa đường kết nối ra ngoài để thực thi mẫu mã độc PE, trích xuất RAM dump định kỳ và trích xuất đặc trưng bằng **Volatility / VolMemLyzer**.
+
+---
+
+## ⚠️ Cảnh Báo An Toàn & Trách Nhiệm
+
+Lab này chỉ dành cho **mục đích cá nhân, học tập và nghiên cứu**. Nếu chạy **mã độc thật**. Bạn tự chịu hoàn toàn trách nhiệm về an toàn khi dùng nó.
+
+* **Không có gì bảo đảm an toàn 100%.** Tắt mạng và các thiết bị chỉ giảm rủi ro. Lỗ hổng trong VirtualBox, Guest Additions hoặc hệ điều hành host có thể cho phép mã độc thoát khỏi máy ảo (VM escape).
+* **Gửi mẫu bằng guestcontrol mở thêm một kênh** giữa máy thật và máy ảo (xem mục 7.2). Kênh này không bị tắt khi mẫu đang chạy.
+* **Lab và script được cung cấp nguyên trạng ("as is"), không có bảo hành nào.** Tác giả không chịu trách nhiệm cho mất dữ liệu, lây nhiễm hay thiệt hại nào khác phát sinh từ việc dùng chúng.
 
 ---
 
 ## 📑 Mục Lục
+- [Cảnh Báo An Toàn & Trách Nhiệm](#️-cảnh-báo-an-toàn--trách-nhiệm)
 - [1. Kiến Trúc Môi Trường Lab](#1-kiến-trúc-môi-trường-lab)
 - [2. Kịch Bản Thu Thập & Xử Lý Dữ Liệu](#2-kịch-bản-thu-thập--xử-lý-dữ-liệu)
   - [2.1 Danh mục mẫu mã độc kiểm thử](#21-danh-mục-mẫu-mã-độc-kiểm-thử)
@@ -113,16 +124,52 @@ Bộ công cụ trích xuất **58 đặc trưng** từ RAM (bao gồm 26 đặc
 | **Process View** | Bảng danh sách tiến trình | Đối chiếu chéo giữa danh sách tiến trình hiển thị chuẩn (`pslist`) và quét vết bộ nhớ thô (`psscan`) để lật tẩy tiến trình bị rootkit giấu đi. |
 | **Apihooks** | Bảng hook hàm hệ thống | Thống kê số lượng API Windows bị hook (chuyển hướng gọi hàm) ở cả tầng người dùng (user mode) lẫn tầng lõi. |
 
+### 3.1 Trích xuất đặc trưng từ dump (`extract_features.py`)
+
+Dataset gốc dùng **Volatility 2.6 + VolMemLyzer V1.0.0** (bản VolMemLyzer cho Vol2; `main` và `V2.0.0` đã được viết lại cho Volatility 3 nên **không** cho ra đúng 55 cột này). `lab/extract_features.py` port lại công thức của V1.0.0, chạy 9 plugin (`pslist, dlllist, handles, ldrmodules, malfind, psxview, modules, svcscan, callbacks`) và ghi CSV cùng bố cục `MalMem2022.csv`: 55 đặc trưng, rồi `Class`, `Category`, `Filename`.
+
+**Cài đặt (một lần, ngoài repo):** Volatility 2 cần Python 2.7.
+```bash
+conda create -n vol2 -c conda-forge python=2.7 pip
+conda run -n vol2 python -m pip install distorm3 pycrypto openpyxl ujson pillow
+git clone https://github.com/volatilityfoundation/volatility.git ~/tools/volatility   # master: has Win10 19041 profile
+```
+
+**Chạy:**
+```bash
+export VOL2_PYTHON=~/miniforge3/envs/vol2/bin/python
+export VOL2_PY=~/tools/volatility/vol.py
+python3 lab/extract_features.py lab/dumps --output lab/features.csv \
+    --reference-csv MalMem2022.csv --resume
+```
+
+* Dùng Volatility 2 `master` (không dùng bản 2.6.1): guest là Windows 10 2004 (build 19041), bản 2.6.1 chỉ hỗ trợ đến build 17134.
+* `--profile` mặc định `Win10x64_19041` (kiểm tra bằng `vol.py -f <dump> imageinfo`).
+* `Category` lấy từ phần tên file trước `_dump_` (quy ước `Family-Name`, hoặc `Benign`); `Class` = `Benign` nếu label là `Benign`, còn lại `Malware`.
+* JSON thô của từng plugin được cache ở `lab/dumps/.vol_cache/` (mỗi dump ~3 phút, `handles` lâu nhất); `--resume` bỏ qua dump đã có trong CSV.
+* `--reference-csv` dừng lại nếu tên/thứ tự cột khác header của `MalMem2022.csv`.
+
+**Lưu ý khi so sánh với dataset gốc:** guest ở đây là Windows 10 build 19041, còn dataset gốc dùng một bản Windows khác (vd `modules.nmodules` ≤ 138, `svcscan.nservices` ≤ 395). Vì vậy một số cột lệch phân phối (`pslist.avg_handlers` — Vol2 không đọc được `Hnds` trên build này, `svcscan.*`, `psxview.not_in_deskthrd`...). Nên huấn luyện/kiểm thử trên dữ liệu thu từ cùng một guest.
+
 ---
 
 ## 4. Cơ Chế Cô Lập & Bảo Mật Sandbox
 
-Tệp cấu hình [Vagrantfile](Vagrantfile) được thiết kế theo nguyên tắc an toàn nghiêm ngặt để mã độc không thể thoát ra máy thật:
+Tệp cấu hình [Vagrantfile](Vagrantfile) được thiết kế để giảm khả năng mã độc tác động ra máy thật. Các biện pháp dưới đây giảm rủi ro nhưng không loại bỏ nó:
 
-* **Tắt thư mục chia sẻ (`synced_folder disabled: true`):** Chặn đứng ransomware mã hóa hoặc can thiệp tệp tin trên máy thật.
+* **Tắt toàn bộ mạng:** Tất cả 8 network adapter của VirtualBox được đặt là `none`. Điều này đặc biệt cần thiết vì VirtualBox/Vagrant thường tự tạo adapter 1 ở chế độ NAT, kể cả khi Vagrantfile không khai báo `public_network` hay `private_network`.
+* **Không có kênh quản trị từ xa:** `communicator = "none"` ngăn Vagrant tạo kênh giao tiếp/port-forward vào guest. Vì vậy không dùng provisioning hay tự động kiểm tra trạng thái Windows trong chế độ phân tích.
+* **Tắt thư mục chia sẻ (`synced_folder disabled: true`):** Giảm nguy cơ ransomware mã hóa hoặc can thiệp tệp tin trên máy thật.
 * **Tắt Clipboard & Kéo thả tệp:** Ngăn rò rỉ dữ liệu hoặc vô tình kích hoạt file qua thao tác chuột.
-* **Tắt toàn bộ cổng ngoại vi:** Vô hiệu hóa USB, cổng nối tiếp (UART) và cổng song song (LPT).
+* **Tắt toàn bộ cổng ngoại vi và audio:** Vô hiệu hóa USB, audio, cổng nối tiếp (UART) và cổng song song (LPT).
+* **Tắt remote display:** VRDE bị vô hiệu hóa để VM không mở dịch vụ màn hình từ xa trên host.
 * **Cấu hình phần cứng:** Cấp phát 2 vCPUs và đúng **2048 MB RAM** (2 GB) theo chuẩn thử nghiệm.
+
+> [!WARNING]
+> Cấu hình này là **offline mặc định**. Không bật lại NAT, bridged, host-only adapter, Shared Folder, clipboard hoặc drag-and-drop khi thực thi mẫu malware. Sau khi thay đổi Vagrantfile, hãy hủy/tạo lại VM (hoặc kiểm tra kỹ cấu hình VM trong VirtualBox) vì VM đã tạo trước đó có thể vẫn giữ NIC/NAT cũ.
+
+> [!WARNING]
+> Không có sandbox VirtualBox nào an toàn tuyệt đối trước lỗ hổng VM escape. Guest Additions và `VBoxManage guestcontrol` mở thêm một kênh giữa máy thật và máy ảo. Chỉ chạy mẫu trên host chuyên dụng. Host này phải được cập nhật bản vá, không có dữ liệu hay tài khoản nhạy cảm và tách khỏi LAN.
 
 ---
 
@@ -133,11 +180,23 @@ Di chuyển vào thư mục `lab`:
 cd lab
 ```
 
+Vagrant 2.4.x coi communicator offline là tính năng thử nghiệm. Hãy bật nó trong shell trước khi chạy lệnh Vagrant nào cho lab này. Script `run_sample.py` tự bật nó cho các lệnh Vagrant của chính nó.
+
+```bash
+export VAGRANT_EXPERIMENTAL=none_communicator
+```
+
 ### 5.1 Khởi động máy ảo
 ```bash
 vagrant up
 ```
 Cửa sổ giao diện đồ họa (GUI) của Windows 10 sẽ hiển thị trực tiếp trên màn hình.
+
+Ở chế độ offline, Vagrant không kết nối vào Windows và không chạy provisioner. Lệnh `vagrant up` chỉ tạo và khởi động VM.
+
+Mẫu được gửi vào VM bằng `run_sample.py` (xem mục 7). Không bật lại mạng chỉ để sao chép mẫu.
+
+Box gốc khai báo chuyển tiếp RDP và Vagrant thường tự thêm chuyển tiếp SSH. Vagrantfile đã tắt cả hai. Vì vậy log khởi động không được có bước `Forwarding ports`.
 
 ### 5.2 Kiểm tra trạng thái máy ảo
 ```bash
@@ -159,6 +218,7 @@ vagrant status
   ```bash
   vagrant halt
   ```
+  Ở chế độ offline, Vagrant không nói chuyện được với Windows nên có thể phải chờ lâu. `run_sample.py` dùng `VBoxManage controlvm Win10_Malware_Mem_Demo poweroff` để tắt ngay.
 * **Buộc dừng ngay lập tức:**
   ```bash
   vagrant halt --force
@@ -172,7 +232,7 @@ vagrant status
 
 ## 6. Quản Lý Snapshot & Khôi Phục Trạng Thái Sạch
 
-Trước khi thả bất kỳ tệp mã độc nào vào máy ảo, **bắt buộc** phải tạo một điểm lưu trạng thái máy sạch (Clean Snapshot):
+Trước khi thả bất kỳ tệp mã độc nào vào máy ảo, **bắt buộc** phải có một snapshot máy sạch (Clean Snapshot).
 
 ```bash
 # 1. Lưu snapshot máy ảo sạch (khi Windows đã khởi động ổn định)
@@ -181,71 +241,116 @@ vagrant snapshot save clean_base_state
 # 2. Xem danh sách snapshot
 vagrant snapshot list
 
-# 3. Khôi phục máy về trạng thái sạch ban đầu sau khi kết thúc thử nghiệm
-vagrant snapshot restore clean_base_state
+# 3. Khôi phục máy về trạng thái sạch sau khi thử nghiệm
+vagrant snapshot restore clean_base_state_7zip
 ```
+
+Lab này có 3 snapshot:
+
+| Snapshot | Nội dung |
+| :--- | :--- |
+| `clean_base_state` | Máy sạch ban đầu. |
+| `clean_base_state_no-win-virus-protect` | Máy sạch, đã tắt bảo vệ chống virus của Windows. |
+| `clean_base_state_7zip` | Như trên, thêm 7-Zip portable. **Đây là snapshot mặc định của `run_sample.py`.** |
 
 ---
 
 ## 7. Kịch Bản Tự Động Hóa Thu Thập (Automation Script)
 
-Dưới đây là script Bash mô phỏng chu trình tự động: khôi phục máy sạch $\rightarrow$ nạp mẫu & kích hoạt chạy $\rightarrow$ chụp 10 lần cách nhau 15 giây $\rightarrow$ phục hồi lại máy sạch:
+Script [`run_sample.py`](run_sample.py) dùng Python 3 và chỉ cần thư viện chuẩn. Mỗi mẫu đi qua 5 bước:
+
+1. Khôi phục snapshot sạch.
+2. Kiểm tra máy ảo không có card mạng hay NAT port-forward nào.
+3. Copy file zip (vẫn còn mật khẩu) vào máy ảo. Giải nén bằng 7-Zip và chạy mẫu ngay trong máy ảo.
+4. Chụp RAM 10 lần, mỗi lần cách nhau 15 giây.
+5. Revert về snapshot sạch.
+
+Máy thật không bao giờ giải nén hay chạy mẫu. Bước 5 luôn chạy, kể cả khi lỗi hoặc khi bạn bấm Ctrl-C. Khi xong tất cả mẫu, script tắt máy ảo.
+
+### 7.1 Cách chạy
 
 ```bash
-#!/usr/bin/env bash
-set -e
+cd lab
 
-VM_NAME="Win10_Malware_Mem_Demo"
-OUTPUT_DIR="./dumps"
-SAMPLE_NAME="test_malware_sample"
+# Mặc định: dừng chờ Enter trước mỗi bước (dùng để demo)
+./run_sample.py ~/samples/foo.zip
 
-mkdir -p "$OUTPUT_DIR"
+# Chạy một mạch, không dừng
+./run_sample.py --auto ~/samples/*.zip
 
-echo "[1] Khôi phục máy ảo về trạng thái sạch ban đầu..."
-vagrant snapshot restore clean_base_state
+# Zip có mật khẩu khác, hoặc zip chứa nhiều file
+./run_sample.py ~/samples/foo.zip --password infected --run foo.exe
 
-echo "[2] Nạp và kích hoạt mẫu mã độc: $SAMPLE_NAME trong máy ảo..."
-# Nạp mẫu mã độc vào thư mục tạm qua kênh hypervisor:
-VBoxManage guestcontrol "$VM_NAME" copyto \
-    --username "vagrant" --password "vagrant" \
-    --target-directory "C:\\Users\\vagrant\\AppData\\Local\\Temp\\sample.exe" \
-    "./samples/${SAMPLE_NAME}.exe"
-
-# Kích hoạt thực thi ngầm:
-VBoxManage guestcontrol "$VM_NAME" run \
-    --username "vagrant" --password "vagrant" \
-    --exe "cmd.exe" -- "/c" "start" "" "C:\\Users\\vagrant\\AppData\\Local\\Temp\\sample.exe"
-
-echo "[3] Bắt đầu chu kỳ chụp 10 ảnh bộ nhớ RAM (cách nhau 15 giây)..."
-for i in {1..10}; do
-    TIMESTAMP=$(date +%s)
-    DUMP_FILE="${OUTPUT_DIR}/${SAMPLE_NAME}_dump_${i}_${TIMESTAMP}.raw"
-
-    echo " -> Chụp lần $i/10: $DUMP_FILE"
-    VBoxManage debugvm "$VM_NAME" dumpvmcore --filename "$DUMP_FILE"
-
-    if [ "$i" -lt 10 ]; then
-        echo " -> Tạm dừng 15 giây để mã độc tiếp tục thực thi..."
-        sleep 15
-    fi
-done
-
-echo "[4] Đã hoàn tất 10 lần chụp. Khôi phục lại máy sạch..."
-vagrant snapshot restore clean_base_state
-echo "Hoàn thành! Các file .raw sẵn sàng để đưa vào Volatility / VolMemLyzer."
+# Không có zip: tự khởi chạy mẫu trong cửa sổ máy ảo
+./run_sample.py --sample sample_label
 ```
+
+Các tùy chọn khác:
+
+| Tùy chọn | Ý nghĩa | Mặc định |
+| :--- | :--- | :--- |
+| `--count` | Số lần chụp RAM | 10 |
+| `--pause` | Tạm dừng VM trong mỗi lần chụp (màn hình mờ), chụp xong tự tiếp tục | tắt |
+| `--interval` | Số giây giữa hai lần chụp | 15 |
+| `--settle` | Số giây cho mẫu chạy trước lần chụp đầu | 20 |
+| `--output` | Thư mục chứa file dump | `./dumps` |
+| `--snapshot` | Snapshot sạch dùng để khôi phục | `clean_base_state_7zip` |
+| `--vm` | Tên máy ảo | `Win10_Malware_Mem_Demo` |
+
+Tên mẫu chỉ được chứa chữ, số, `.`, `_` và `-`. Nhờ đó file dump không thể bị ghi ra ngoài thư mục đích.
+
+### 7.2 Yêu cầu trong snapshot sạch
+
+* Guest Additions đã cài và đang chạy.
+* Người dùng `vagrant` tự động đăng nhập.
+* 7-Zip portable nằm tại `C:\Sandbox\7z\x64\7za.exe`. Bản 7-Zip cài sẵn cũng dùng được.
+* Mật khẩu của người dùng guest lấy từ biến môi trường `VBOX_GUEST_PASSWORD`. Mặc định là `vagrant`.
+
+> [!WARNING]
+> Việc gửi mẫu dùng `VBoxManage guestcontrol`. Nó cần Guest Additions và mở một kênh điều khiển từ máy thật vào máy ảo. Kênh này có rủi ro VM escape (xem mục 4). Chỉ dùng trên host chuyên dụng. Không thay nó bằng shared folder và không bật mạng.
+
+### 7.3 Cách tạo snapshot có 7-Zip
+
+Tiến trình chạy qua guestcontrol bị lọc quyền (UAC). Nó không cài được gói MSI cho cả máy và không tạo được Scheduled Task với `/RL HIGHEST`. Vì vậy lab dùng 7-Zip portable.
+
+```bash
+# Máy ảo đang chạy từ snapshot sạch. Tải 7zr.exe và 7z2301-extra.7z từ https://www.7-zip.org
+VM=Win10_Malware_Mem_Demo
+echo -n vagrant > /tmp/pw && chmod 600 /tmp/pw
+VBoxManage guestcontrol $VM copyto --username vagrant --passwordfile /tmp/pw \
+  --target-directory 'C:\Sandbox\' 7zr.exe 7z2301-extra.7z
+VBoxManage guestcontrol $VM run --username vagrant --passwordfile /tmp/pw \
+  --exe 'C:\Windows\System32\cmd.exe' --wait-stdout --wait-stderr -- \
+  cmd.exe /c 'C:\Sandbox\7zr.exe x -y -oC:\Sandbox\7z C:\Sandbox\7z2301-extra.7z'
+rm /tmp/pw
+vagrant snapshot save clean_base_state_7zip
+```
+
+Hãy copy vào `C:\Sandbox`. Copy vào `C:\Windows\Temp` báo thành công nhưng file không được ghi.
 
 ---
 
 ## 8. Khắc Phục Sự Cố Thường Gặp (Troubleshooting)
 
-### Lỗi 1: Quá thời gian chờ nạp Windows (`WinRM Timeout`)
+### Lỗi 1: Không thấy Windows khởi động
 * **Nguyên nhân:** Windows 10 khởi động lần đầu hoặc chạy cấu hình sysprep mất nhiều thời gian hơn dự kiến.
-* **Cách xử lý:** Tham số `config.vm.boot_timeout = 700` đã được cấu hình trong [Vagrantfile](Vagrantfile). Bạn có thể mở trực tiếp cửa sổ giao diện VirtualBox để theo dõi tiến trình khởi động của hệ thống.
+* **Cách xử lý:** Ở chế độ offline, Vagrant không kiểm tra trạng thái của guest. Mở trực tiếp cửa sổ GUI của VirtualBox để theo dõi tiến trình khởi động.
 
 ### Lỗi 2: Đầy dung lượng ổ cứng
 * **Nguyên nhân:** Mỗi bản ghi dump RAM đầy đủ chiếm 2 GB dung lượng. Một chuỗi 10 lần chụp cho một mẫu sẽ tiêu tốn ~20 GB lưu trữ.
 * **Cách xử lý:** Sau khi dùng VolMemLyzer trích xuất xong đặc trưng sang file CSV (~2 KB), hãy chủ động xóa hoặc nén các file `.raw` thô để giải phóng không gian đĩa cứng.
+
+### Lỗi 3: Guest không trả lời guestcontrol
+* **Nguyên nhân:** Guest Additions chưa chạy xong, sai mật khẩu, hoặc người dùng chưa đăng nhập.
+* **Cách xử lý:** Chờ thêm bằng `--boot-wait`. Kiểm tra mật khẩu trong `VBOX_GUEST_PASSWORD`. Mở cửa sổ máy ảo và xem Windows đã vào màn hình desktop chưa.
+
+### Lỗi 4: Giải nén hoặc chạy mẫu thất bại
+* **Nguyên nhân:** Snapshot không có 7-Zip, mật khẩu zip sai, hoặc zip có nhiều file chạy được.
+* **Cách xử lý:** Dùng snapshot `clean_base_state_7zip`. Thêm `--password` nếu mật khẩu khác `infected`. Thêm `--run TÊN_FILE` để chọn file cần chạy.
+
+### Lỗi 5: Volatility không đọc được file dump
+* **Nguyên nhân:** `dumpvmcore` tạo file ELF64 core dù tên file có đuôi `.raw`.
+* **Cách xử lý:** Volatility 2 nhận file này tự động (address space `VirtualBoxCoreDumpElf64`, xem `imageinfo`); với Volatility 3 dùng layer `vboxelf64`.
 
 ---
 
