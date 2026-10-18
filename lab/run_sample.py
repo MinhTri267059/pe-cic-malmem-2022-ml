@@ -10,6 +10,7 @@ Default is step by step (Enter before each stage); --auto runs unattended.
 Without any zip, use --sample NAME and start the sample by hand in the VM GUI.
 """
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -21,6 +22,8 @@ from pathlib import Path
 
 LAB_DIR = Path(__file__).resolve().parent
 GUEST_DIR = "C:\\Sandbox"
+CMD = r"C:\Windows\System32\cmd.exe"
+PIECE = 48 * 1024  # guestcontrol copyto fails on larger writes with some Guest Additions
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 PASSWORD_RE = re.compile(r"^[A-Za-z0-9._@%+=-]*$")  # reaches a guest command line
@@ -40,7 +43,7 @@ $out = 'C:\Sandbox\out'
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-$sevenZip = @('C:\Sandbox\7z\x64\7za.exe', "$env:ProgramFiles\7-Zip\7z.exe", "${env:ProgramFiles(x86)}\7-Zip\7z.exe") |
+$sevenZip = @('C:\Sandbox\7z\x64\7za.exe', 'C:\Sandbox\7-ZipPortable\App\7-Zip\7z.exe', "$env:ProgramFiles\7-Zip\7z.exe", "${env:ProgramFiles(x86)}\7-Zip\7z.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($sevenZip) {
     $a = @('x', '-y', "-o$out")
@@ -168,8 +171,37 @@ class Lab:
                 time.sleep(5)
 
             self.pause("copy the still-locked zip into the guest")
-            gc("copyto", "--target-directory", GUEST_DIR + "\\",
-               str(tmp / "sample.zip"), str(tmp / "launch_sample.ps1"))
+
+            def guest_cmd(line):
+                r = gc("run", "--exe", CMD, "--wait-stdout", "--timeout", "60000", "--",
+                       "cmd.exe", "/c", line, check=False)
+                return (r.stdout or "") if r.returncode == 0 else ""
+
+            def guest_sha256(path):
+                m = re.search(r"\b[0-9a-f]{64}\b", guest_cmd(f"certutil -hashfile {path} SHA256").lower())
+                return m.group(0) if m else None
+
+            def put(src):
+                dest = GUEST_DIR + "\\" + src.name
+                want = hashlib.sha256(src.read_bytes()).hexdigest()
+                gc("copyto", "--target-directory", GUEST_DIR + "\\", str(src), check=False)
+                if guest_sha256(dest) == want:
+                    return
+                print(f"copyto of {src.name} corrupt or failed, resending in {PIECE // 1024} KiB pieces")
+                parts = GUEST_DIR + "\\parts"
+                guest_cmd(f"rmdir /s /q {parts} & mkdir {parts}")
+                data = src.read_bytes()
+                for n, i in enumerate(range(0, len(data), PIECE)):
+                    piece = tmp / f"p{n:05d}"
+                    piece.write_bytes(data[i:i + PIECE])
+                    gc("copyto", "--target-directory", parts + "\\", str(piece), check=False)
+                    piece.unlink()
+                guest_cmd(f"cd /d {parts} && copy /b /y p* {dest}")
+                if guest_sha256(dest) != want:
+                    raise RuntimeError(f"{src.name} still differs from the host copy after resending")
+
+            put(tmp / "sample.zip")
+            put(tmp / "launch_sample.ps1")
 
             self.pause("unzip inside the guest and launch the sample")
             ps_args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
