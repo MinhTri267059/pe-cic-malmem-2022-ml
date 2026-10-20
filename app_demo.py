@@ -47,7 +47,7 @@ def load_model_and_data():
     X_scaled = pd.DataFrame(scaler.fit_transform(X_raw), columns=X_raw.columns)
 
     # ponytail: cùng random_state/test_size dùng khi train (reproduce_experiment.py), để khớp tập test gốc
-    X_train, X_test, y_train, y_test = train_test_split(
+    _, X_test, _, y_test = train_test_split(
         X_scaled, y, test_size=0.2, random_state=42, stratify=y
     )
     X_raw_test = X_raw.loc[X_test.index]
