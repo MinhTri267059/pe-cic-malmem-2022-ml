@@ -1,6 +1,11 @@
 *.pkl
 MalMem2022.csv
 Dataset_*.csv
+.env
 .DS_Store
 catboost_info/
 .vagrant/
+lab/dumps/
+lab/features*.csv
+__pycache__/
+lab/samples/
