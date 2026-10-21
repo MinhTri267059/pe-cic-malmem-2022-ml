@@ -4,7 +4,7 @@ Chạy: streamlit run app_demo.py
 
 Dùng model XGBoost đã train, hỗ trợ cả 3 kịch bản (Binary / 4 nhóm / 16 lớp).
 Chọn 1 mẫu từ tập test, hoặc từ các file đặc trưng thật trong "demo test/"
-(dữ liệu lab của Triết Lê), xem xác suất dự đoán + so sánh đặc trưng với
+(dữ liệu lab của nhóm), xem xác suất dự đoán + so sánh đặc trưng với
 giá trị trung bình theo lớp.
 """
 import json
@@ -112,10 +112,10 @@ with tab_detect:
     demo_test_files = list_demo_test_files()
     source_options = ["Lấy ngẫu nhiên từ tập test", "Chọn theo vị trí (tập test)"]
     if demo_test_files:
-        source_options.append("File demo test (Triết Lê)")
+        source_options.append("Demo của nhóm")
     source = st.sidebar.radio("Nguồn mẫu", source_options)
 
-    if source == "File demo test (Triết Lê)":
+    if source == "Demo của nhóm":
         demo_file = st.sidebar.selectbox("File trong demo test/", demo_test_files)
         demo_df = pd.read_csv(DEMO_TEST_DIR / demo_file)
         row_idx = st.sidebar.slider("Dòng trong file", 0, len(demo_df) - 1, 0) if len(demo_df) > 1 else 0
