@@ -4,6 +4,7 @@ import os
 import json
 import joblib
 from sklearn.model_selection import train_test_split, cross_validate, StratifiedKFold
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -18,7 +19,7 @@ warnings.filterwarnings('ignore')
 # ---------------------------------------------------------
 def preprocess_data(df, scenario):
     df = df.drop_duplicates()
-    
+
     labels = []
     for index, row in df.iterrows():
         if scenario == 1:
@@ -45,26 +46,28 @@ def preprocess_data(df, scenario):
                     labels.append(parts[1])
                 else:
                     labels.append(category)
-    
+
     df['Label'] = labels
-    
+
     cols_to_drop = ['Label']
     for col in ['Filename', 'Class', 'Category']:
         if col in df.columns:
             cols_to_drop.append(col)
-            
+
+    # ponytail: KHÔNG scale ở đây nữa — scaler phải fit riêng trên từng tập train
+    # (80% split và mỗi fold CV) để tránh rò rỉ thống kê (mean/std) từ tập test vào
+    # quá trình chuẩn hóa. Xem run_experiment() bên dưới.
     X = df.drop(columns=cols_to_drop)
     y = df['Label']
-    
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    X_scaled = pd.DataFrame(X_scaled, columns=X.columns)
-    
-    # Tạo dataset đã tiền xử lý để xuất ra file CSV
-    df_preprocessed = X_scaled.copy()
+
+    # Dataset tiền xử lý xuất ra CSV vẫn dùng scaler fit trên toàn bộ dữ liệu —
+    # chỉ để tham khảo/EDA, không dùng để train model.
+    preview_scaler = StandardScaler()
+    X_preview = pd.DataFrame(preview_scaler.fit_transform(X), columns=X.columns)
+    df_preprocessed = X_preview.copy()
     df_preprocessed['Label'] = y.values
-    
-    return X_scaled, y, df_preprocessed
+
+    return X, y, df_preprocessed
 
 # ---------------------------------------------------------
 # 2. Hàm Đánh giá mô hình (Evaluation Metrics)
@@ -142,25 +145,32 @@ def run_experiment(file_path, scenario):
     with open(f'{model_dir}/label_mapping.json', 'w') as f:
         json.dump(label_mapping, f, indent=4)
 
+    # Tập split 80/20 dùng chung cho mọi model, để các model có cùng dữ liệu test
+    X_train, X_test, y_train, y_test = train_test_split(X, y_mapped, test_size=0.2, random_state=42, stratify=y_mapped)
+
     for name, model in models.items():
         print(f"---> Đang huấn luyện: {name}")
-        
-        # 3.1. 80% Split
-        X_train, X_test, y_train, y_test = train_test_split(X, y_mapped, test_size=0.2, random_state=42, stratify=y_mapped)
-        
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        
-        # Lưu mô hình đã train (từ 80% split) ra file
+
+        # 3.1. 80% Split — scaler fit CHỈ trên X_train, tránh rò rỉ thông tin từ X_test
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
+
+        # Lưu mô hình + scaler đã train (từ 80% split) ra file
         safe_model_name = name.split(' (')[0].replace(' ', '_').replace('-', '_')
         joblib.dump(model, f'{model_dir}/{safe_model_name}.pkl')
-        
+        joblib.dump(scaler, f'{model_dir}/{safe_model_name}_scaler.pkl')
+
         labels_mapped_list = list(label_mapping.values())
         acc_split, rec_split, prec_split, f1_split, fpr_split = calculate_metrics(y_test, y_pred, labels_mapped_list)
-        
-        # 3.2. 10-Fold CV
+
+        # 3.2. 10-Fold CV — Pipeline(scaler, model) để scaler fit riêng trên train fold của mỗi vòng
+        cv_pipeline = Pipeline([('scaler', StandardScaler()), ('model', model)])
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-        cv_scores = cross_validate(model, X, y_mapped, cv=cv, scoring=['accuracy', 'recall_weighted', 'precision_weighted', 'f1_weighted'], n_jobs=-1)
+        cv_scores = cross_validate(cv_pipeline, X, y_mapped, cv=cv, scoring=['accuracy', 'recall_weighted', 'precision_weighted', 'f1_weighted'], n_jobs=-1)
         
         acc_cv = cv_scores['test_accuracy'].mean()
         rec_cv = cv_scores['test_recall_weighted'].mean()

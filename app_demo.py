@@ -17,7 +17,6 @@ import pandas as pd
 import streamlit as st
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 st.set_page_config(page_title="Demo phát hiện mã độc", layout="wide")
 
@@ -62,6 +61,7 @@ def build_label(df, scenario):
 @st.cache_resource
 def load_model_and_data(scenario):
     model = joblib.load(f"Models/Scenario_{scenario}/XGBoost.pkl")
+    scaler = joblib.load(f"Models/Scenario_{scenario}/XGBoost_scaler.pkl")
     with open(f"Models/Scenario_{scenario}/label_mapping.json") as f:
         label_mapping = json.load(f)
     inv_label_mapping = {v: k for k, v in label_mapping.items()}
@@ -71,15 +71,13 @@ def load_model_and_data(scenario):
     y = y_label.map(label_mapping)
     X_raw = df.drop(columns=[c for c in ["Filename", "Class", "Category"] if c in df.columns])
 
-    scaler = StandardScaler()
-    X_scaled = pd.DataFrame(scaler.fit_transform(X_raw), columns=X_raw.columns)
-
-    # ponytail: cùng random_state/test_size dùng khi train (reproduce_experiment.py), để khớp tập test gốc
-    _, X_test, _, y_test = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42, stratify=y
+    # ponytail: cùng random_state/test_size dùng khi train (reproduce_experiment.py), để khớp tập test gốc;
+    # split trên X thô rồi transform bằng scaler đã fit lúc train (chỉ trên X_train gốc)
+    _, X_test_raw, _, y_test = train_test_split(
+        X_raw, y, test_size=0.2, random_state=42, stratify=y
     )
-    X_raw_test = X_raw.loc[X_test.index]
-    return model, inv_label_mapping, X_test, y_test, X_raw_test, df, y_label, scaler, X_raw.columns.tolist()
+    X_test = pd.DataFrame(scaler.transform(X_test_raw), columns=X_raw.columns, index=X_test_raw.index)
+    return model, inv_label_mapping, X_test, y_test, X_test_raw, df, y_label, scaler, X_raw.columns.tolist()
 
 
 DEMO_TEST_DIR = Path("demo test")

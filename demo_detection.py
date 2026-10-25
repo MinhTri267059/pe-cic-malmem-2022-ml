@@ -19,10 +19,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay, confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 SCENARIO = 1
 MODEL_PATH = f"Models/Scenario_{SCENARIO}/XGBoost.pkl"
+SCALER_PATH = f"Models/Scenario_{SCENARIO}/XGBoost_scaler.pkl"
 LABEL_MAP_PATH = f"Models/Scenario_{SCENARIO}/label_mapping.json"
 OUT_DIR = "demo_outputs"
 
@@ -38,6 +38,7 @@ TOP_FEATURES = [
 
 
 def load_data():
+    scaler = joblib.load(SCALER_PATH)
     df = pd.read_csv("MalMem2022.csv").drop_duplicates().reset_index(drop=True)
     y = df["Class"]
     X = df.drop(columns=[c for c in ["Filename", "Class", "Category"] if c in df.columns])
@@ -46,16 +47,14 @@ def load_data():
         label_mapping = json.load(f)
     y_mapped = y.map(label_mapping)
 
-    scaler = StandardScaler()
-    X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
-
-    # ponytail: cùng random_state/test_size dùng khi train, để tái lập đúng tập test gốc
-    _, X_test, _, y_test = train_test_split(
-        X_scaled, y_mapped, test_size=0.2, random_state=42, stratify=y_mapped
+    # ponytail: cùng random_state/test_size dùng khi train, để tái lập đúng tập test gốc;
+    # split trên X thô rồi transform bằng scaler đã fit lúc train (chỉ trên X_train gốc)
+    _, X_test_raw, _, y_test = train_test_split(
+        X, y_mapped, test_size=0.2, random_state=42, stratify=y_mapped
     )
-    X_raw_test = X.loc[X_test.index]
+    X_test = pd.DataFrame(scaler.transform(X_test_raw), columns=X.columns, index=X_test_raw.index)
     inv_label_mapping = {v: k for k, v in label_mapping.items()}
-    return X_test, y_test, X_raw_test, df, inv_label_mapping
+    return X_test, y_test, X_test_raw, df, inv_label_mapping
 
 
 def plot_sample_card(model, x_sample, raw_sample, true_label, inv_label_mapping, means, out_path):

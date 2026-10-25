@@ -226,7 +226,7 @@ def label_of(dump):
 def meta_of(dump):
     label = label_of(dump)
     return {
-        "Class": "Benign" if label.lower() == "benign" else "Malware",
+        "Class": "Benign" if label.lower().startswith("benign") else "Malware",
         "Category": label,
         "Filename": dump.name,
     }

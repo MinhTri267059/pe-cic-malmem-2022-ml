@@ -134,3 +134,45 @@ Biểu đồ dưới đây tổng hợp mối tương quan giữa số lượng 
 
 * **Số lớp tăng từ 2 ➔ 4 ➔ 16**: Độ chính xác giảm tương ứng từ **100% ➔ ~87.7% ➔ ~76.6%**.
 * **XGBoost & Random Forest**: Luôn giữ vững phong độ là hai mô hình có khả năng phân loại xuất sắc và ổn định nhất ở mọi kịch bản.
+
+---
+
+## ⚠️ 5. Hạn Chế Phát Hiện: Model Không Tổng Quát Hóa Sang Dữ Liệu Lab Thực Tế
+
+Khi thử chạy model XGBoost (Kịch bản 1 - Binary) đã train trên CIC-MalMem-2022 với các mẫu RAM dump thu thập thực tế từ lab sandbox của nhóm (`demo test/*.csv`, 32 bản ghi, toàn bộ nhãn gốc là Malware), **model dự đoán sai 100%** — toàn bộ được gán nhãn Benign với độ tin cậy ~99.5–100%.
+
+### 5.1 Nguyên nhân gốc rễ: đặc trưng "chữ ký máy" bị rò rỉ
+
+Phân tích `feature_importances_` của XGBoost cho thấy **một đặc trưng duy nhất là `svcscan.nservices` chiếm 96,3%** tổng độ quan trọng — gần như toàn bộ quyết định phân loại Benign/Malware dồn vào 1 cột.
+
+So sánh phân phối `svcscan.nservices` theo nhãn trong CIC-MalMem-2022:
+
+| Lớp | Mean | Std | Min | Max |
+| :--- | :---: | :---: | :---: | :---: |
+| Benign | 394,21 | **1,35** | 388 | 395 |
+| Malware | 388,49 | 4,81 | 94 | 395 |
+
+Độ lệch chuẩn của lớp Benign gần như bằng 0 (CV = 0,0034) — bất thường với một đặc trưng hệ thống thực tế thường dao động theo cấu hình máy. Đối chiếu dữ liệu lab của nhóm (32 mẫu Malware thật) thì `svcscan.nservices` nằm trong khoảng 502–633, hoàn toàn nằm ngoài vùng [388, 395] mà model học được là "Benign".
+
+Mở rộng kiểm tra, còn 8 đặc trưng khác cũng gần như hằng số ở lớp Benign (CV < 0,08): `callbacks.ngeneric`, `svcscan.fs_drivers`, `svcscan.kernel_drivers`, `modules.nmodules`, `svcscan.shared_process_services`, `callbacks.ncallbacks`, `svcscan.nactive`, `svcscan.process_services`. Đây đều là các đặc trưng phản ánh **cấu hình hệ điều hành** (số service, driver, kernel module đang nạp) chứ không phải hành vi runtime của tiến trình.
+
+**Nguyên nhân sâu xa:** theo tài liệu công bố của CIC-MalMem-2022, lớp Benign được tạo bằng kỹ thuật **SMOTE oversampling** từ một baseline nhỏ ban đầu (không phải 29.298 máy/phiên chụp độc lập). Vì vậy nhãn (Benign/Malware) và "chữ ký hệ thống" của máy chụp dump bị **nhầm lẫn hoàn toàn (confounded)** trong toàn bộ dataset — model học đúng cách phân biệt 2 lớp trên dataset này, nhưng thứ nó học được là "đây có phải máy baseline hay không", không phải "có mã độc hay không".
+
+### 5.2 Thử nghiệm xác nhận: loại bỏ đặc trưng không giải quyết được vấn đề
+
+Huấn luyện lại XGBoost sau khi loại bỏ 9 đặc trưng nghi ngờ rò rỉ ở trên:
+
+| | Số đặc trưng | Accuracy trên MalMem2022 test | Accuracy trên dữ liệu lab (32 mẫu Malware) |
+| :--- | :---: | :---: | :---: |
+| Baseline (còn leak) | 55 | 100,00% | **0,00%** |
+| Loại bỏ 9 đặc trưng leak | 46 | 99,98% | **0,00%** (không đổi) |
+
+Sau khi loại bỏ, model chỉ chuyển sang bám vào đặc trưng rò rỉ khác — `dlllist.avg_dlls_per_proc` chiếm 88,96% độ quan trọng mới — và vẫn dự đoán sai 100% trên dữ liệu lab. Điều này xác nhận: **sự rò rỉ không nằm ở vài đặc trưng cụ thể mà ở cách thiết kế dataset** (toàn bộ Benign từ 1 nguồn baseline), nên không thể sửa bằng feature selection đơn lẻ.
+
+### 5.3 Hướng khắc phục đề xuất
+
+1. **Thu thập thêm mẫu Benign đa dạng** từ lab sandbox của nhóm (`lab/run_sample.py`) — chạy trên nhiều snapshot/cấu hình VM khác nhau để phá vỡ sự nhầm lẫn giữa nhãn và chữ ký máy, rồi trộn vào tập train cùng CIC-MalMem-2022.
+2. **Bổ sung/thay thế bằng dataset khác có Benign đa dạng hơn**, ví dụ:
+   - **MalVol-25** (Dunsin et al., 2025) — cặp snapshot sạch/nhiễm từ nhiều môi trường VM khác nhau, có trên IEEE DataPort (DOI: [10.21227/kg5b-nf37](https://dx.doi.org/10.21227/kg5b-nf37)).
+   - **BCCC-MalMem-SnapLog-2025** (York University) — 8 loại mã độc, snapshot theo khoảng thời gian, nhưng mất cân bằng nặng (250 Benign / 2.000 Malware).
+3. **Domain adaptation**: chuẩn hóa đặc trưng hệ thống theo độ lệch so với baseline riêng của từng máy/phiên thu thập (nếu có đủ dữ liệu theo nhóm), thay vì dùng giá trị tuyệt đối.
