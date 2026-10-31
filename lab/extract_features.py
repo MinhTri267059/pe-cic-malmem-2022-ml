@@ -11,7 +11,8 @@ the Volatility 2 extractor that defines the dataset's column names. Quirks of th
 original are kept on purpose so values stay comparable with MalMem2022.csv.
 
 Use Volatility 2 master (not the 2.6.1 release): the guest is Windows 10 2004
-(build 19041), which 2.6.1 cannot read. Volatility 2 needs Python 2.7; point --vol-python / --vol-py (or the env vars
+(build 19041), which 2.6.1 cannot read. With --vol3, handles and psxview come from Volatility 3 (Volatility 2 fails on them
+for this build). Volatility 2 needs Python 2.7; point --vol-python / --vol-py (or the env vars
 VOL2_PYTHON / VOL2_PY) at an interpreter and its vol.py. The label of a dump is
 the part of the file name before "_dump_" (see run_sample.py).
 """
@@ -129,9 +130,10 @@ def extract_psxview(rc):
     procs = rc2kv(rc)
     feats = {}
     for name, key in PSXVIEW_VIEWS:
-        feats["psxview.not_in_" + name] = count(procs, key, "False")
-    for name, key in PSXVIEW_VIEWS:
-        feats["psxview.not_in_%s_false_avg" % name] = avg(count(procs, key, "False"), len(procs))
+        # Volatility 3's psxview has no pspcid/session/deskthrd views: those columns stay blank.
+        have = bool(procs) and key in procs[0]
+        feats["psxview.not_in_" + name] = count(procs, key, "False") if have else None
+        feats["psxview.not_in_%s_false_avg" % name] = avg(count(procs, key, "False"), len(procs)) if have else None
     return feats
 
 
@@ -175,12 +177,41 @@ PLUGINS = {
 }
 
 
+# Volatility 2 cannot run these on build 19041; with --vol3 they come from Volatility 3.
+VOL3_PLUGINS = {"handles": "windows.handles.Handles", "psxview": "windows.malware.psxview.PsXView"}
+
+
+def vol3_to_rc(plugin, rows):
+    """Reshape Volatility 3 JSON rows into the {"columns", "rows"} layout of the Volatility 2 output."""
+    if plugin == "handles":
+        return {"columns": ["Pid", "Type"], "rows": [[r["PID"], r["Type"]] for r in rows]}
+    views = [("pslist", "pslist"), ("psscan", "psscan"), ("thrdproc", "thrdscan"), ("csrss", "csrss")]
+    return {"columns": [k for k, _ in views],
+            "rows": [[str(bool(r[v])) for _, v in views] for r in rows]}
+
+
+def run_vol3(args, dump, plugin):
+    cmd = [args.vol3, "-q", "-r", "json", "-f", str(dump), VOL3_PLUGINS[plugin]]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        rc = vol3_to_rc(plugin, json.loads(proc.stdout))
+        rc["rows"][0]
+    except (ValueError, KeyError, IndexError):
+        tail = proc.stderr.strip().splitlines()[-3:]
+        raise RuntimeError("vol3 %s failed (exit %d): %s" % (plugin, proc.returncode, " | ".join(tail)))
+    return rc
+
+
 def run_plugin(args, dump, plugin, cache_dir):
-    """Return the parsed Volatility 2 JSON for one plugin, using the cache."""
+    """Return the parsed Volatility JSON for one plugin, using the cache."""
     cached = cache_dir / (plugin + ".json")
     if cached.is_file() and cached.stat().st_size > 0:
         return json.loads(cached.read_text())
     cache_dir.mkdir(parents=True, exist_ok=True)
+    if args.vol3 and plugin in VOL3_PLUGINS:
+        rc = run_vol3(args, dump, plugin)
+        cached.write_text(json.dumps(rc))
+        return rc
     with tempfile.TemporaryDirectory(dir=cache_dir) as tmp:
         out = Path(tmp) / (plugin + ".json")
         cmd = [args.vol_python, args.vol_py, "-f", str(dump), "--profile=" + args.profile,
@@ -227,7 +258,7 @@ def meta_of(dump):
     label = label_of(dump)
     return {
         "Class": "Benign" if label.lower().startswith("benign") else "Malware",
-        "Category": label,
+        "Category": "Benign" if label.lower().startswith("benign") else label,
         "Filename": dump.name,
     }
 
@@ -288,6 +319,8 @@ def main():
                     help="Python 2.7 interpreter that runs Volatility 2 (env VOL2_PYTHON)")
     ap.add_argument("--vol-py", default=os.environ.get("VOL2_PY"),
                     help="path to Volatility 2 vol.py (env VOL2_PY)")
+    ap.add_argument("--vol3", default=os.environ.get("VOL3"),
+                    help="Volatility 3 `vol` executable, used for handles and psxview (env VOL3)")
     ap.add_argument("--profile", default=DEFAULT_PROFILE,
                     help="Volatility profile (default: %(default)s)")
     ap.add_argument("--cache-dir", type=Path, default=None,

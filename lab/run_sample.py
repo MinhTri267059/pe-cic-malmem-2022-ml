@@ -22,6 +22,7 @@ from pathlib import Path
 
 LAB_DIR = Path(__file__).resolve().parent
 GUEST_DIR = "C:\\Sandbox"
+SANDBOX_NET = "sbxnet"
 CMD = r"C:\Windows\System32\cmd.exe"
 PIECE = 48 * 1024  # guestcontrol copyto fails on larger writes with some Guest Additions
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -74,6 +75,16 @@ if ($LASTEXITCODE -ne 0) { throw 'schtasks /Run failed' }
 & schtasks.exe /Delete /F /TN $task | Out-Null
 Write-Output "Launched $($target.FullName)"
 """
+
+
+# Benign profiles: guest-native programs started in the interactive session (no sample).
+BENIGN_PROFILES = {
+    "idle": [],
+    "office": [r"C:\Windows\System32\notepad.exe", r"C:\Windows\System32\calc.exe",
+               r"C:\Windows\System32\mspaint.exe", r"C:\Program Files\Windows NT\Accessories\wordpad.exe"],
+    "browse": [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe http://example.com",
+               r"C:\Windows\System32\notepad.exe"],
+}
 
 
 class Aborted(Exception):
@@ -131,12 +142,35 @@ class Lab:
         """
         info = self.vbox("showvminfo", self.a.vm, "--machinereadable", capture=True).stdout
         lines = set(info.splitlines())
-        for n in range(1, 9):
-            if f'nic{n}="none"' not in lines:
-                raise RuntimeError(f"adapter {n} is not disabled")
+        if self.a.network == "none":
+            for n in range(1, 9):
+                if f'nic{n}="none"' not in lines:
+                    raise RuntimeError(f"adapter {n} is not disabled")
+            if re.search(r"^natpf[1-8]=", info, re.M):
+                raise RuntimeError("a NAT port-forward rule is configured")
+            print("OK: all 8 adapters disabled, no NAT forwards.")
+            return
+
+        # Fake internet: the guest's only adapter is on the internal network, and
+        # the gateway VM (INetSim) has no adapter other than that network.
+        self.check_only_sandbox_net(self.a.vm, lines, info)
+        gw_info = self.vbox("showvminfo", self.a.gateway, "--machinereadable", capture=True).stdout
+        if 'VMState="running"' not in gw_info:
+            raise RuntimeError(f"gateway VM {self.a.gateway} is not running")
+        self.check_only_sandbox_net(self.a.gateway, set(gw_info.splitlines()), gw_info)
+        print(f"OK: {self.a.vm} and {self.a.gateway} only on internal network "
+              f"'{SANDBOX_NET}', no NAT/bridged/host-only adapters.")
+
+    def check_only_sandbox_net(self, vm, lines, info):
+        """Exactly one adapter, type intnet on SANDBOX_NET; every other adapter none."""
+        in_use = [n for n in range(1, 9) if f'nic{n}="none"' not in lines]
+        if len(in_use) != 1:
+            raise RuntimeError(f"{vm}: expected exactly one adapter, found {in_use}")
+        n = in_use[0]
+        if f'nic{n}="intnet"' not in lines or f'intnet{n}="{SANDBOX_NET}"' not in lines:
+            raise RuntimeError(f"{vm}: adapter {n} is not internal network '{SANDBOX_NET}'")
         if re.search(r"^natpf[1-8]=", info, re.M):
-            raise RuntimeError("a NAT port-forward rule is configured")
-        print("OK: all 8 adapters disabled, no NAT forwards.")
+            raise RuntimeError(f"{vm}: a NAT port-forward rule is configured")
 
     def deliver(self, zip_path):
         """Stage 3: copy the still-locked zip into the guest, unzip and launch it there.
@@ -214,6 +248,36 @@ class Lab:
             gc("run", "--exe", POWERSHELL, "--wait-stdout", "--wait-stderr",
                "--timeout", "120000", "--", "powershell.exe", *ps_args)
 
+    def deliver_benign(self, profile):
+        """Wait for the guest, then start the profile's programs as the interactive user."""
+        a = self.a
+        with tempfile.TemporaryDirectory() as tmp:
+            pw_file = Path(tmp) / "guest.pw"
+            pw_file.write_text(a.guest_password)
+            pw_file.chmod(0o600)
+
+            def gc(sub, *argv, check=True):
+                return self.vbox("guestcontrol", a.vm, sub, "--username", a.guest_user,
+                                 "--passwordfile", str(pw_file), *argv, check=check,
+                                 capture=True if not check else False)
+
+            print(f"Waiting for Guest Additions (up to {a.boot_wait}s)...")
+            deadline = time.monotonic() + a.boot_wait
+            while gc("mkdir", "--parents", GUEST_DIR, check=False).returncode != 0:
+                if time.monotonic() > deadline:
+                    raise RuntimeError("guest did not answer guestcontrol")
+                time.sleep(5)
+            for n, cmdline in enumerate(BENIGN_PROFILES[profile]):
+                exe = cmdline.split(".exe")[0] + ".exe"
+                task = f"SbxBenign{n}"
+                line = (f'if exist "{exe}" (schtasks /Create /F /TN {task} /SC ONCE /ST 23:59 '
+                        f'/RU {a.guest_user} /IT /TR "{cmdline}" && schtasks /Run /TN {task} '
+                        f'&& schtasks /Delete /F /TN {task})')
+                gc("run", "--exe", CMD, "--wait-stdout", "--timeout", "60000", "--",
+                   "cmd.exe", "/c", line, check=False)
+                print(f"Started {cmdline}")
+                time.sleep(3)
+
     def poweroff(self):
         """Last step of the whole run: power the (already reverted) VM off.
 
@@ -221,6 +285,31 @@ class Lab:
         """
         print("Powering off the VM...")
         self.vbox("controlvm", self.a.vm, "poweroff", check=False)
+
+    def save_tasklist(self, sample, when):
+        """With --tasklist: save the guest's process list next to the dumps.
+
+        $ VBoxManage guestcontrol Win10_Malware_Mem_Demo run --username vagrant --passwordfile PW \\
+              --exe cmd.exe --wait-stdout -- cmd.exe /c "tasklist /v"
+        """
+        a = self.a
+        out = Path(a.output)
+        out.mkdir(parents=True, exist_ok=True)
+        reports = {
+            f"{sample}_tasklist_{when}.txt": "tasklist /v",
+            # crashes and .NET errors from the sample show up here
+            f"{sample}_events_{when}.txt": "wevtutil qe Application /c:20 /rd:true /f:text",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            pw_file = Path(tmp) / "guest.pw"
+            pw_file.write_text(a.guest_password)
+            pw_file.chmod(0o600)
+            for name, command in reports.items():
+                r = self.vbox("guestcontrol", a.vm, "run", "--username", a.guest_user,
+                              "--passwordfile", str(pw_file), "--exe", CMD, "--wait-stdout",
+                              "--timeout", "60000", "--", "cmd.exe", "/c", command,
+                              capture=True, check=False)
+                (out / name).write_text(r.stdout or "")
 
     def dump(self, sample):
         """Stage 4: take --count memory dumps of the running VM, --interval seconds apart.
@@ -260,15 +349,23 @@ class Lab:
             self.pause(f"[{sample}] verify the VM has no network path")
             self.verify_isolation()
 
-            if zip_path:
+            if self.a.benign:
+                self.deliver_benign(self.a.benign)
+                print(f"Letting the benign '{self.a.benign}' profile run for {self.a.settle}s before the first dump...")
+                time.sleep(self.a.settle)
+            elif zip_path:
                 self.deliver(zip_path)
                 print(f"Letting the sample run for {self.a.settle}s before the first dump...")
                 time.sleep(self.a.settle)
             else:
                 input(f"\n>> Start '{sample}' by hand in the VM GUI, then press Enter: ")
 
+            if self.a.tasklist:
+                self.save_tasklist(sample, "start")
             self.pause(f"[{sample}] capture {self.a.count} memory dumps")
             self.dump(sample)
+            if self.a.tasklist:
+                self.save_tasklist(sample, "end")
         except (KeyboardInterrupt, Aborted):
             aborted = True
             raise
@@ -299,11 +396,21 @@ def parse_args():
     p.add_argument("--output", default=str(LAB_DIR / "dumps"), help="dump directory (default: ./dumps)")
     p.add_argument("--vm", default="Win10_Malware_Mem_Demo")
     p.add_argument("--snapshot", default="clean_base_state_7zip")
+    p.add_argument("--network", choices=["none", "fake"], default="none",
+                   help="none: guest has no adapter (default); fake: guest on internal "
+                        "network sbxnet with the INetSim gateway VM")
+    p.add_argument("--gateway", default="Sandbox_GW", help="INetSim gateway VM (--network fake)")
+    p.add_argument("--tasklist", action="store_true",
+                   help="save the guest process list before the first and after the last dump")
+    p.add_argument("--benign", choices=sorted(BENIGN_PROFILES),
+                   help="no sample: run a benign profile; label the dumps with --sample Benign-<profile>")
     p.add_argument("--guest-user", default="vagrant")
     p.add_argument("--boot-wait", type=int, default=300, help="seconds to wait for Guest Additions")
     a = p.parse_args()
     a.guest_password = os.environ.get("VBOX_GUEST_PASSWORD", "vagrant")  # not on argv
 
+    if a.benign and (a.zips or not a.sample):
+        p.error("--benign takes no zip and needs --sample NAME")
     if not a.zips and not a.sample:
         p.error("give at least one zip, or --sample NAME to start a sample by hand")
     if a.sample and len(a.zips) > 1:

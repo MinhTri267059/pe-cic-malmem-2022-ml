@@ -1,0 +1,23 @@
+# Sandbox_GW: fake-internet gateway (INetSim) for the malware sandbox.
+#
+# Boot once with `vagrant up` (NAT adapter on nic1 is only used to apt install
+# inetsim), then run lab/gateway/finalize.sh, which removes the NAT adapter.
+# Afterwards the VM's only adapter is the internal network "sbxnet".
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/debian12"
+  config.vm.hostname = "gateway"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # nic2: internal network shared with the Windows guest (192.168.100.0/24)
+  config.vm.network "private_network", ip: "192.168.100.1", netmask: "255.255.255.0",
+                    virtualbox__intnet: "sbxnet"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "Sandbox_GW"
+    vb.gui = false
+    vb.cpus = 1
+    vb.memory = 512
+  end
+
+  config.vm.provision "shell", path: "provision.sh"
+end
