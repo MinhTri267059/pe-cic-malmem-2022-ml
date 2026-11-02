@@ -23,10 +23,25 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 # 1. Đăng ký TrueType Font tiếng Việt chuẩn (Arial)
-pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
-pdfmetrics.registerFont(TTFont('Arial-Bold', 'C:/Windows/Fonts/arialbd.ttf'))
-pdfmetrics.registerFont(TTFont('Arial-Italic', 'C:/Windows/Fonts/ariali.ttf'))
-pdfmetrics.registerFont(TTFont('Arial-BoldItalic', 'C:/Windows/Fonts/arialbi.ttf'))
+#    (tự dò font theo hệ điều hành; trước đây chỉ chạy được trên Windows)
+_FONT_CANDIDATES = {
+    'Arial': ['C:/Windows/Fonts/arial.ttf', '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
+              '/Library/Fonts/Arial.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'],
+    'Arial-Bold': ['C:/Windows/Fonts/arialbd.ttf', '/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf',
+                   '/Library/Fonts/Arial Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'],
+    'Arial-Italic': ['C:/Windows/Fonts/ariali.ttf', '/usr/share/fonts/truetype/msttcorefonts/Arial_Italic.ttf',
+                     '/Library/Fonts/Arial Italic.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf',
+                     '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'],
+    'Arial-BoldItalic': ['C:/Windows/Fonts/arialbi.ttf', '/usr/share/fonts/truetype/msttcorefonts/Arial_Bold_Italic.ttf',
+                         '/Library/Fonts/Arial Bold Italic.ttf',
+                         '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf',
+                         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'],
+}
+for _name, _paths in _FONT_CANDIDATES.items():
+    _path = next((p for p in _paths if os.path.exists(p)), None)
+    if _path is None:
+        raise FileNotFoundError(f"Không tìm thấy font cho {_name}: {_paths}")
+    pdfmetrics.registerFont(TTFont(_name, _path))
 
 pdfmetrics.registerFontFamily(
     'Arial',
@@ -712,7 +727,7 @@ def build_pdf_report(output_pdf_path):
 
 if __name__ == '__main__':
     pdf_path = os.path.join(
-        r"D:\Tai Lieu Hoc Tap Cao Hoc\Chuyên đề nghiên cứu về Phân loại mã độc\pe-cic-malmem-2022-ml\new feature",
+        os.path.dirname(os.path.abspath(__file__)), "new feature",
         "BaoCao_TongKet_CacChoThayDoi_WGAN_FewShot_DataLeakage.pdf"
     )
     build_pdf_report(pdf_path)

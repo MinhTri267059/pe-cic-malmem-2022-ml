@@ -1,0 +1,10 @@
+{
+  "corr_diff_norm":3.0780893915,
+  "mean_mae":2.3478537973,
+  "pca_explained_variance_ratio":[
+    0.48713475,
+    0.1911329016
+  ],
+  "TSTR_Macro_F1":0.1818856385,
+  "TRTR_Macro_F1":0.3616186968
+}

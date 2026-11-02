@@ -1,5 +1,12 @@
 # BÁO CÁO CHUYÊN SÂU: PHÂN TÍCH, KIỂM ĐỊNH VÀ KHẮC PHỤC RÒ RỈ DỮ LIỆU (DATA LEAKAGE AUDIT & REMEDIATION) TRÊN BỘ 22 ĐẶC TRƯNG CIC-MALMEM-2022
 
+> ⚠️ **ĐÍNH CHÍNH (cập nhật sau kiểm định lại):** Các số liệu GAN / Few-Shot trong báo cáo này được đo bằng
+> `train_test_split` ngẫu nhiên theo dòng (≈99,9% tệp mã độc trong test đã có dump ở train) và few-shot được
+> tiền huấn luyện trên toàn bộ tập train, nên **bị lạc quan giả**. Các mức "cải thiện" do GAN (±0,3–0,5 điểm) nằm
+> trong nhiễu của một lần chia duy nhất. Kết quả đã được đo lại theo giao thức không rò rỉ (chia theo SampleID,
+> kiểm định bootstrap) – xem **[BaoCao_SuaLoi_VaToiUu_KhongRoRi.md](BaoCao_SuaLoi_VaToiUu_KhongRoRi.md)**.
+
+
 **Dự án:** Phân loại mã độc trên bộ nhớ RAM (Volatility Memory Forensics) - Tập 22 đặc trưng tàng hình (`ldrmodules`, `malfind`, `psxview`).  
 **Tác giả:** Nhóm nghiên cứu Cao học An toàn thông tin.  
 **Ngày thực hiện:** 02/11/2026.

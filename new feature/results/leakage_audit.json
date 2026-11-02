@@ -1,0 +1,16 @@
+{
+  "dup_rows_22": 32505,
+  "unique_vectors_22": 29935,
+  "conflict_patterns_22": 2506,
+  "bayes_ceiling_s1_22": 1.0,
+  "bayes_ceiling_s1_55": 1.0,
+  "bayes_ceiling_s2_22": 0.9155744419414295,
+  "bayes_ceiling_s2_55": 0.9998293398866817,
+  "bayes_ceiling_s3_22": 0.84075704826268,
+  "bayes_ceiling_s3_55": 0.9996586797733634,
+  "malware_binaries": 2887,
+  "Naive_binary_overlap": 0.9992076069730587,
+  "Naive_exact_row_overlap": 0.5399317406143345,
+  "Group(SampleID)_binary_overlap": 0.0,
+  "Group(SampleID)_exact_row_overlap": 0.5192258504561343
+}
