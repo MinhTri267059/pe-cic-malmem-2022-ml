@@ -1,6 +1,9 @@
 *.pkl
 MalMem2022.csv
-Dataset_*.csv
+/Dataset_*.csv
+/new feature/Dataset_22features.csv
+/new feature/Dataset_22features_Scenario_*.csv
+!/new feature/results/*.csv
 .env
 .DS_Store
 catboost_info/
