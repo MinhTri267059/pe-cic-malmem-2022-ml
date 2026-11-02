@@ -1,5 +1,12 @@
 # BÁO CÁO KHOA HỌC: HUẤN LUYỆN NÂNG CAO PHÂN LOẠI MÃ ĐỘC VỚI CONDITIONAL WGAN-GP VÀ FEW-SHOT LEARNING TRÊN BỘ ĐẶC TRƯNG TÀNG HÌNH BỘ NHỚ (22 STEALTH FEATURES)
 
+> ⚠️ **ĐÍNH CHÍNH (cập nhật sau kiểm định lại):** Các số liệu GAN / Few-Shot trong báo cáo này được đo bằng
+> `train_test_split` ngẫu nhiên theo dòng (≈99,9% tệp mã độc trong test đã có dump ở train) và few-shot được
+> tiền huấn luyện trên toàn bộ tập train, nên **bị lạc quan giả**. Các mức "cải thiện" do GAN (±0,3–0,5 điểm) nằm
+> trong nhiễu của một lần chia duy nhất. Kết quả đã được đo lại theo giao thức không rò rỉ (chia theo SampleID,
+> kiểm định bootstrap) – xem **[BaoCao_SuaLoi_VaToiUu_KhongRoRi.md](BaoCao_SuaLoi_VaToiUu_KhongRoRi.md)**.
+
+
 **Đề tài nghiên cứu:** Nghiên cứu và thực nghiệm phương pháp làm giàu dữ liệu bằng Generative Adversarial Networks (GAN) và học ít mẫu (Few-Shot Learning) trên tập đặc trưng tàng hình bộ nhớ CIC-MalMem-2022 (New Feature - 22 Features).  
 **Học viên thực hiện:** Học viên Cao học ngành An toàn thông tin / Khoa học máy tính  
 **Môi trường thực nghiệm:** NVIDIA GeForce RTX 5070 GPU (CUDA 12.8), PyTorch 2.6, XGBoost 3.1, LightGBM 4.6, CatBoost 1.2, Scikit-learn.

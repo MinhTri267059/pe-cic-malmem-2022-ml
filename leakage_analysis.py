@@ -1,107 +1,113 @@
 # -*- coding: utf-8 -*-
 """
-Chương trình Kiểm định & Khắc phục Rò rỉ Dữ liệu (Data Leakage Audit & Fix)
-trên bộ dữ liệu 22 đặc trưng CIC-MalMem-2022.
+Kiểm định Rò rỉ Dữ liệu (Data Leakage Audit) trên CIC-MalMem-2022 (22 đặc trưng + 55 đặc trưng).
 
-Phát hiện và định lượng 5 loại rò rỉ dữ liệu tiềm ẩn:
-1. Exact Duplicate Row Leakage (Trùng lặp chính xác giữa Train và Test)
-2. Temporal Snapshot / SampleID Group Leakage (Rò rỉ các dump -1.raw đến -10.raw của cùng một mẫu mã độc)
-3. Label Ambiguity / Contradiction (Cùng 22 giá trị nhưng nhãn khác nhau)
-4. Few-Shot Transductive / Prior-Knowledge Leakage (GAN/Embedder học trên lớp novel)
-5. Preprocessing & Export Artifact Leakage (Thiếu cờ Is_Synthetic)
+  1. Exact duplicate rows (trùng lặp tuyệt đối giữa train/test)
+  2. Label contradictions (cùng vector đặc trưng nhưng khác nhãn -> trần độ chính xác)
+  3. Snapshot / SampleID group leakage (10 dump -1.raw..-10.raw của cùng một tệp)
+  4. So sánh tỷ lệ rò rỉ: Naive split vs Group split (StratifiedGroupKFold)
+  5. Trần độ chính xác lý thuyết (Bayes ceiling) do xung đột nhãn
+
+SỬA LỖI: đường dẫn tuyệt đối D:\\... -> tương đối; tự sinh dataset 22 đặc trưng; bổ sung
+đo đạc trên Group split (trước chỉ đo naive split nên không kiểm chứng được giải pháp).
 """
 
 import os
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
-import re
+import json
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, GroupShuffleSplit
+from sklearn.model_selection import train_test_split
 
-BASE_DIR = r"D:\Tai Lieu Hoc Tap Cao Hoc\Chuyên đề nghiên cứu về Phân loại mã độc\pe-cic-malmem-2022-ml"
-NEW_FEAT_DIR = os.path.join(BASE_DIR, "new feature")
+from common import (read_22feature_dataset, feature_columns,
+                    group_train_test_split, load_raw, raw_feature_columns, RESULTS_DIR)
 
-def extract_sample_id(fn):
-    """Trích xuất mã SHA256/Binary ID bỏ đuôi mốc thời gian (-1.raw, -2.raw,...)."""
-    m = re.match(r'^(.*)-(\d+)\.raw$', str(fn))
-    return m.group(1) if m else str(fn)
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
-def audit_dataset_leakage():
+
+def bayes_ceiling(df, feat_cols, label_col):
+    """Độ chính xác tối đa đạt được nếu với mỗi vector đặc trưng ta đoán nhãn phổ biến nhất."""
+    key = pd.util.hash_pandas_object(df[feat_cols], index=False)
+    ct = pd.crosstab(key, df[label_col])
+    return ct.max(axis=1).sum() / len(df)
+
+
+def exact_overlap(df, feat_cols, tr, te):
+    key = pd.util.hash_pandas_object(df[feat_cols], index=False).values
+    tr_set = set(key[tr])
+    return float(np.mean([k in tr_set for k in key[te]]))
+
+
+def audit_dataset_leakage(output_dir=RESULTS_DIR):
     print("=" * 80)
-    print("🔍 BẮT ĐẦU KIỂM ĐỊNH TOÀN DIỆN CÁC ĐIỂM RÒ RỈ DỮ LIỆU (DATA LEAKAGE AUDIT)")
+    print("🔍 KIỂM ĐỊNH TOÀN DIỆN CÁC ĐIỂM RÒ RỈ DỮ LIỆU (DATA LEAKAGE AUDIT)")
     print("=" * 80)
+    report = {}
+    df = read_22feature_dataset()            # Category = 16 lớp
+    feat_cols = feature_columns(df)
+    print(f"\n📂 Tổng số mẫu: {len(df):,} | Số đặc trưng: {len(feat_cols)}")
 
-    # Đọc file tổng thể 22 features
-    csv_master = os.path.join(NEW_FEAT_DIR, "Dataset_22features.csv")
-    df_master = pd.read_csv(csv_master)
-    feat_cols = [c for c in df_master.columns if c not in ['Class', 'Category', 'Label', 'Filename']]
+    # 1. Trùng lặp
+    dup = df.duplicated(subset=feat_cols, keep=False)
+    n_unique = df[feat_cols].drop_duplicates().shape[0]
+    print(f"\n[1] TRÙNG LẶP TRÊN 22 ĐẶC TRƯNG: {dup.sum():,} dòng ({dup.mean()*100:.2f}%) | "
+          f"{n_unique:,} vector duy nhất")
+    report['dup_rows_22'] = int(dup.sum())
+    report['unique_vectors_22'] = int(n_unique)
 
-    print(f"\n📂 Tổng số mẫu master: {len(df_master):,} | Số đặc trưng: {len(feat_cols)}")
+    # 2. Xung đột nhãn + trần Bayes
+    g = df.groupby(feat_cols)['Category'].nunique()
+    report['conflict_patterns_22'] = int((g > 1).sum())
+    raw = load_raw()
+    full_cols = raw_feature_columns(raw)
+    print(f"\n[2] XUNG ĐỘT NHÃN: {report['conflict_patterns_22']:,} vector có >1 nhãn (16 lớp)")
+    print("    Trần độ chính xác lý thuyết (Bayes ceiling – kể cả khi mô hình hoàn hảo):")
+    for sc, col in [(1, 'Class'), (2, 'Group'), (3, 'Family')]:
+        c22 = bayes_ceiling(raw, [c for c in feat_cols], col)
+        c55 = bayes_ceiling(raw, full_cols, col)
+        report[f'bayes_ceiling_s{sc}_22'] = c22
+        report[f'bayes_ceiling_s{sc}_55'] = c55
+        print(f"      • Kịch bản {sc}: 22 đặc trưng = {c22*100:.2f}% | 55 đặc trưng = {c55*100:.2f}%")
+    print("    => 22 đặc trưng tàng hình có rất nhiều vector toàn 0 / giống nhau giữa các họ -> trần thấp.")
 
-    # -------------------------------------------------------------------------
-    # 1. KIỂM ĐỊNH TRÙNG LẶP HÀNG CHÍNH XÁC (EXACT DUPLICATES)
-    # -------------------------------------------------------------------------
-    dup_feats = df_master.duplicated(subset=feat_cols, keep=False)
-    num_dup_rows = dup_feats.sum()
-    print(f"\n[1] KIỂM TRA TRÙNG LẶP HÀNG TRÊN 22 ĐẶC TRƯNG:")
-    print(f"   • Số hàng có giá trị đặc trưng bị trùng lặp: {num_dup_rows:,} ({num_dup_rows/len(df_master)*100:.2f}%)")
-    print(f"   • Số vector đặc trưng độc nhất (Unique Patterns): {df_master[feat_cols].drop_duplicates().shape[0]:,}")
+    # 3. Snapshot leakage
+    mal = df[df['Class'] != 'Benign']
+    n_bin = mal['SampleID'].nunique()
+    print(f"\n[3] SNAPSHOT: {len(mal):,} dòng mã độc từ {n_bin:,} tệp ({len(mal)/n_bin:.1f} dump/tệp)")
+    report['malware_binaries'] = int(n_bin)
 
-    # -------------------------------------------------------------------------
-    # 2. KIỂM ĐỊNH XUNG ĐỘT NHÃN (LABEL CONTRADICTIONS)
-    # -------------------------------------------------------------------------
-    grouped_cat = df_master.groupby(feat_cols)['Category'].nunique()
-    conflict_patterns = grouped_cat[grouped_cat > 1]
-    print(f"\n[2] KIỂM TRA XUNG ĐỘT NHÃN (CÙNG ĐẶC TRƯNG NHƯNG KHÁC CATEGORY):")
-    print(f"   • Số pattern có nhãn Category mâu thuẫn: {len(conflict_patterns):,}")
-    
-    # -------------------------------------------------------------------------
-    # 3. KIỂM ĐỊNH RÒ RỈ NHÓM / MÃ ĐỘC QUA CÁC DUMP BỘ NHỚ (GROUP / SNAPSHOT LEAKAGE)
-    # -------------------------------------------------------------------------
-    df_malware = df_master[df_master['Class'] != 'Benign'].copy()
-    df_malware['SampleID'] = df_malware['Filename'].apply(extract_sample_id)
-    unique_malware_binaries = df_malware['SampleID'].nunique()
-    print(f"\n[3] KIỂM TRA QUAN HỆ CÁC BẢN DUMP THỜI GIAN (TEMPORAL SNAPSHOTS):")
-    print(f"   • Tổng số bản ghi Malware: {len(df_malware):,}")
-    print(f"   • Số mẫu mã độc nhị phân thực tế (Unique Binaries): {unique_malware_binaries:,}")
-    print(f"   • Tỷ lệ trung bình số dump/mẫu mã độc: {len(df_malware)/unique_malware_binaries:.1f} dump/mẫu")
+    # 4. Naive vs Group split
+    print("\n[4] RÒ RỈ KHI CHIA 80/20:")
+    y = df['Category'].values
+    groups = df['SampleID'].values
+    tr_n, te_n = train_test_split(np.arange(len(df)), test_size=0.2, random_state=42, stratify=y)
+    tr_g, te_g = group_train_test_split(y, groups, test_size=0.2, seed=42)
+    for name, tr, te in [('Naive', tr_n, te_n), ('Group(SampleID)', tr_g, te_g)]:
+        ms = df['Class'].values != 'Benign'
+        te_bins = set(groups[te][ms[te]])
+        ov = te_bins & set(groups[tr][ms[tr]])
+        ex = exact_overlap(df, feat_cols, tr, te)
+        print(f"   • {name:16s}: tệp mã độc test đã có ở train = {len(ov):,}/{len(te_bins):,} "
+              f"({len(ov)/max(1,len(te_bins))*100:.2f}%) | dòng test trùng tuyệt đối với train = {ex*100:.2f}%")
+        report[f'{name}_binary_overlap'] = len(ov) / max(1, len(te_bins))
+        report[f'{name}_exact_row_overlap'] = ex
+    print("   (Trùng tuyệt đối còn lại ở Group split là do các tệp KHÁC NHAU cho cùng vector – chủ yếu"
+          " vector toàn 0 – không phải rò rỉ, mà là giới hạn biểu diễn của 22 đặc trưng.)")
 
-    # Mô phỏng phân chia ngẫu nhiên (Naive Split) và đo đạc rò rỉ
-    print("\n   ⚠️  MÔ PHỎNG PHÂN CHIA NGẪU NHIÊN THEO HÀNG (NAIVE ROW-LEVEL SPLIT 80/20):")
-    tr_idx, te_idx = train_test_split(df_malware.index, test_size=0.2, random_state=42)
-    tr_samples = set(df_malware.loc[tr_idx, 'SampleID'])
-    te_samples = set(df_malware.loc[te_idx, 'SampleID'])
-    overlap_samples = tr_samples.intersection(te_samples)
-    print(f"      - Số mẫu mã độc trong Test: {len(te_samples):,}")
-    print(f"      - Số mẫu mã độc trong Test ĐÃ TỪNG XUẤT HIỆN trong Train: {len(overlap_samples):,} ({len(overlap_samples)/len(te_samples)*100:.2f}%)!")
-    print(f"      => KẾT LUẬN: Gần như 100% mẫu trong tập test bị rò rỉ do xuất phát từ cùng tiến trình!")
+    print("\n🛠️ GIẢI PHÁP ĐÃ ÁP DỤNG TRONG PIPELINE:")
+    print("  1. StratifiedGroupKFold theo SampleID cho mọi thực nghiệm (common.group_train_test_split).")
+    print("  2. Scaler/GAN/encoder chỉ fit trên train (hoặc chỉ trên support trong few-shot).")
+    print("  3. Zero-day: class-disjoint + group-disjoint support/query.")
+    print("  4. CSV tăng cường có cột Is_Synthetic / Split_Role.")
 
-    # -------------------------------------------------------------------------
-    # 4. KIỂM ĐỊNH RÒ RỈ TEST SET TRONG KỊCH BẢN 2 & KỊCH BẢN 3
-    # -------------------------------------------------------------------------
-    print("\n[4] TỶ LỆ TRÙNG LẶP EXACT-ROW TRONG TEST SET KHI CHIA NAIVE:")
-    for sc in [2, 3]:
-        df_sc = pd.read_csv(os.path.join(NEW_FEAT_DIR, f"Dataset_22features_Scenario_{sc}.csv"))
-        f_cols = [c for c in df_sc.columns if c not in ['Class', 'Category', 'Label', 'Filename']]
-        X_tr, X_te = train_test_split(df_sc[f_cols], test_size=0.2, random_state=42, stratify=df_sc['Category'])
-        tr_set = set([tuple(x) for x in X_tr.values])
-        te_list = [tuple(x) for x in X_te.values]
-        leak_count = sum(1 for t in te_list if t in tr_set)
-        print(f"   • Kịch bản {sc}: Test set có {len(X_te):,} mẫu -> Có {leak_count:,} mẫu ({leak_count/len(X_te)*100:.2f}%) trùng lặp hoàn toàn với Train!")
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, 'leakage_audit.json'), 'w', encoding='utf-8') as f:
+        json.dump(report, f, indent=2)
+    return report
 
-    # -------------------------------------------------------------------------
-    # 5. GIẢI PHÁP KHẮC PHỤC TRIỆT ĐỂ (PROPOSED REMEDIATION)
-    # -------------------------------------------------------------------------
-    print("\n" + "=" * 80)
-    print("🛠️ GIẢI PHÁP KHẮC PHỤC RÒ RỈ DỮ LIỆU ĐƯỢC ĐỀ XUẤT:")
-    print("=" * 80)
-    print("1. GROUP-AWARE SPLITTING: Phân tách Train/Test dựa trên SampleID (Binary Hash),")
-    print("   đảm bảo toàn bộ các dump của một mẫu mã độc chỉ nằm ở Train HOẶC Test.")
-    print("2. EXACT DUPLICATE ISOLATION: Xử lý hoặc phân cụm các mẫu trùng lặp tuyệt đối.")
-    print("3. ZERO-DAY NOVEL CLASS FEW-SHOT: Chia lớp thành Base Classes (Train GAN & Embedder)")
-    print("   và Novel Classes (chỉ cấp K mẫu để đánh giá thực sự khả năng thích ứng).")
-    print("4. EXPLICIT ARTIFACT METADATA: Bổ sung cờ 'Is_Synthetic' (0: Thật, 1: GAN) trong các file CSV.")
 
 if __name__ == '__main__':
     audit_dataset_leakage()

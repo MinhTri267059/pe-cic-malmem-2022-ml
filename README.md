@@ -41,6 +41,15 @@ Sau khi tải xong, hãy đặt file `MalMem2022.csv` vào thư mục gốc củ
    ```
    Tự động huấn luyện, tối ưu hóa siêu tham số (Tuning), thử nghiệm mô hình mới (LightGBM, ExtraTrees, CatBoost) và kết hợp đa mô hình (Soft Voting, Stacking Classifier), lưu kết quả vào `Improvement_Scenario_2.csv` và `Improvement_Scenario_3.csv`.
 
+5. **Pipeline không rò rỉ: 22 đặc trưng, GAN, Few-shot, Zero-day + benchmark tối ưu độ chính xác:**
+   ```bash
+   pip install torch
+   python3 run_all_experiments.py          # toàn bộ (~1 giờ trên CPU 4 nhân); thêm --quick để chạy thử
+   python3 leakfree_benchmark.py --quick   # riêng benchmark 22 / 52 / 52+kỹ nghệ đặc trưng
+   ```
+   Dataset 22 đặc trưng được tự sinh từ `MalMem2022.csv` (có thể chỉ định file qua biến môi trường `MALMEM_CSV`).
+   Kết quả nằm trong `new feature/results/`, báo cáo chi tiết: [new feature/BaoCao_SuaLoi_VaToiUu_KhongRoRi.md](new%20feature/BaoCao_SuaLoi_VaToiUu_KhongRoRi.md).
+
 *(Ghi chú: Các file Dataset dung lượng lớn và file model nặng đã được `.gitignore` để tránh phình to kích thước repository).*
 
 ---
@@ -197,3 +206,25 @@ Dưới đây là phần đối chiếu độ chính xác (Accuracy) đạt đư
 > **Kết luận thực nghiệm cải tiến:**
 > 1. **Stacking Ensemble (Phương án 3)** và **LightGBM (Phương án 2)** mang lại hiệu năng cao nhất trên cả hai kịch bản, giúp đẩy độ chính xác Kịch bản 2 lên tới **88.50%** (tăng +1.19% so với XGBoost mặc định) và Kịch bản 3 lên **76.23%** (+0.66%).
 > 2. Đáng chú ý, chỉ số **Macro-F1** (đo lường độ chính xác trung bình trên các họ mã độc thiểu số) được cải thiện rõ rệt: tăng **+1.81%** ở Kịch bản 2 và **+1.55%** ở Kịch bản 3, chứng minh mô hình phân biệt tốt hơn đối với các lớp mã độc khó.
+
+---
+
+## 🛡️ Đánh Giá Không Rò Rỉ & Tối Ưu Độ Chính Xác (Group Split theo mẫu mã độc)
+
+> ⚠️ Các bảng ở trên dùng chia ngẫu nhiên theo dòng (như bài báo gốc). Mỗi tệp mã độc có ~10 dump bộ nhớ, nên
+> **99,9% tệp mã độc trong tập test đã có dump ở tập train** → độ chính xác bị lạc quan giả. Bảng dưới đây dùng
+> `StratifiedGroupKFold` 5-fold theo hash tệp (SampleID): mô hình phải nhận diện **tệp mã độc chưa từng thấy**.
+
+| Kịch bản | 22 đặc trưng tàng hình | 52 đặc trưng | 52 + đặc trưng kỹ nghệ | **+ suy luận theo mẫu** | Naive (rò rỉ) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| Nhị phân (2 lớp) | 99,94% | 99,98% | 99,98% | **100,00%** | 99,99% |
+| 4 nhóm | 81,01% | 85,43% | 85,54% | **88,24%** (Macro-F1 82,31%) | 88,14% |
+| 16 lớp | 66,34% | 71,31% | 71,44% | **74,41%** (Macro-F1 51,97%) | 76,81% |
+
+- **Suy luận theo mẫu:** trung bình xác suất các dump cùng một tệp (mô phỏng chụp RAM nhiều lần khi phân tích một tệp nghi vấn).
+- **GAN (CWGAN-GP):** dưới giao thức không rò rỉ, không mức tăng cường nào (200–2000 mẫu/lớp) cải thiện Macro-F1 có ý nghĩa
+  thống kê (CI 95% bootstrap); với CatBoost/MLP còn làm giảm. Trần lý thuyết của 22 đặc trưng chỉ 91,6% (4 nhóm) và
+  84,1% (16 lớp) do nhiều dump có vector đặc trưng giống hệt nhau giữa các họ — nút thắt nằm ở đặc trưng, không ở dữ liệu.
+- **Zero-day (3 họ mới, K=20 mẫu):** SimpleShot trên 52 đặc trưng đạt 53,8% so với 46,4% của ProtoNet cũ (ngẫu nhiên 33,3%).
+
+Chi tiết 15 lỗi đã sửa, phương pháp và toàn bộ bảng số: [new feature/BaoCao_SuaLoi_VaToiUu_KhongRoRi.md](new%20feature/BaoCao_SuaLoi_VaToiUu_KhongRoRi.md).

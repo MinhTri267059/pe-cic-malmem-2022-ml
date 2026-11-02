@@ -12,3 +12,4 @@ lab/dumps/
 lab/features*.csv
 __pycache__/
 lab/samples/
+/Obfuscated-MalMem2022.csv

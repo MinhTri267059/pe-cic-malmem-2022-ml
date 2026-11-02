@@ -1,0 +1,17 @@
+,Benign,Ransomware-Ako,Ransomware-Conti,Ransomware-Maze,Ransomware-Pysa,Ransomware-Shade,Spyware-180solutions,Spyware-CWS,Spyware-Gator,Spyware-TIBS,Spyware-Transponder,Trojan-Emotet,Trojan-Reconyc,Trojan-Refroso,Trojan-Scar,Trojan-Zeus
+Benign,29296,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0
+Ransomware-Ako,0,511,139,132,164,182,79,148,64,23,153,48,56,71,83,147
+Ransomware-Conti,0,137,633,101,81,244,89,30,140,24,31,65,53,40,98,222
+Ransomware-Maze,0,210,120,712,120,88,44,62,80,24,83,37,16,24,61,277
+Ransomware-Pysa,0,243,104,109,429,142,20,84,50,14,51,111,14,36,74,236
+Ransomware-Shade,0,117,185,83,91,930,104,62,73,34,28,90,43,45,74,169
+Spyware-180solutions,0,77,71,40,37,124,488,101,167,28,352,158,126,49,133,49
+Spyware-CWS,0,82,61,32,70,72,92,544,190,40,503,61,51,11,147,44
+Spyware-Gator,0,11,75,13,2,78,86,51,1502,26,156,32,26,57,38,47
+Spyware-TIBS,0,41,37,16,21,40,28,111,65,885,70,14,3,13,41,25
+Spyware-Transponder,2,79,23,45,52,26,180,507,333,38,951,14,36,41,61,22
+Trojan-Emotet,0,51,70,36,108,161,126,35,41,21,23,831,88,83,187,106
+Trojan-Reconyc,19,31,54,16,16,34,77,16,22,3,22,70,843,106,208,33
+Trojan-Refroso,0,18,24,11,26,16,32,34,39,9,41,40,75,1493,121,21
+Trojan-Scar,0,27,63,43,40,65,81,108,51,7,92,135,191,110,915,72
+Trojan-Zeus,0,79,140,107,101,173,58,43,162,20,32,34,28,22,53,898

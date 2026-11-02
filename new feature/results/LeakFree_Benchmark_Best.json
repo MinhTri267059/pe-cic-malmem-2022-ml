@@ -1,0 +1,38 @@
+{
+  "3": {
+    "Accuracy": 0.7144003003617995,
+    "Macro_F1": 0.46417636971267157,
+    "Weighted_F1": 0.7117210391131603,
+    "Sample_Accuracy": 0.7404089016315106,
+    "Sample_Macro_F1": 0.5108657505681555,
+    "Scenario": 3,
+    "Feature_Set": "55_full+eng",
+    "Model": "XGBoost",
+    "Protocol": "5-fold StratifiedGroupKFold (SampleID)",
+    "Train_Time_Sec": 256.2
+  },
+  "1": {
+    "Accuracy": 0.9998464058980135,
+    "Macro_F1": 0.9998464058976109,
+    "Weighted_F1": 0.999846405897611,
+    "Sample_Accuracy": 0.9999488019660046,
+    "Sample_Macro_F1": 0.9999488019658703,
+    "Scenario": 1,
+    "Feature_Set": "55_full",
+    "Model": "ExtraTrees",
+    "Protocol": "5-fold StratifiedGroupKFold (SampleID)",
+    "Train_Time_Sec": 4.7
+  },
+  "2": {
+    "Accuracy": 0.8553826199740596,
+    "Macro_F1": 0.7824620287130435,
+    "Weighted_F1": 0.8551669995226072,
+    "Sample_Accuracy": 0.8785753293740187,
+    "Sample_Macro_F1": 0.8169975598681927,
+    "Scenario": 2,
+    "Feature_Set": "55_full+eng",
+    "Model": "LightGBM",
+    "Protocol": "5-fold StratifiedGroupKFold (SampleID)",
+    "Train_Time_Sec": 47.9
+  }
+}

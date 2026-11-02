@@ -7,13 +7,16 @@ Hỗ trợ sinh dữ liệu tăng cường (Data Augmentation) từ 200 - 2000 m
 
 import os
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 import time
-import json
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -90,11 +93,9 @@ class TabularCritic(nn.Module):
             nn.Linear(in_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.15),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.LayerNorm(hidden_dim // 2),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.15),
             nn.Linear(hidden_dim // 2, hidden_dim // 4),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(hidden_dim // 4, 1)
@@ -135,6 +136,9 @@ class TabularCWGAN_GP:
 
         self.scaler = None
         self.feature_names = None
+        self.class_prior = None
+        self.int_mask = None      # cột đếm (số nguyên) -> làm tròn khi sinh
+        self.upper = None         # giới hạn trên quan sát được trên train
         self.training_history = {'critic_loss': [], 'gen_loss': [], 'w_dist': []}
 
     def compute_gradient_penalty(self, real_samples, fake_samples, labels):
@@ -160,26 +164,38 @@ class TabularCWGAN_GP:
         gradient_penalty = torch.mean((gradient_norm - 1.0) ** 2)
         return gradient_penalty
 
-    def fit(self, X_train, y_train, epochs=40, batch_size=512, n_critic=2, verbose_every=10):
+    def fit(self, X_train, y_train, epochs=40, batch_size=512, n_critic=5, verbose_every=10,
+            verbose=True):
         """
         Huấn luyện CWGAN-GP trên tập X_train, y_train.
         Scaler được fit CHỈ trên X_train để tránh rò rỉ dữ liệu.
         """
-        self.feature_names = list(X_train.columns) if isinstance(X_train, pd.DataFrame) else None
-        
+        X_df = X_train if isinstance(X_train, pd.DataFrame) else pd.DataFrame(np.asarray(X_train))
+        self.feature_names = list(X_df.columns)
+        X_np = X_df.values.astype(np.float64)
+        y_np = np.asarray(y_train).astype(int)
+        self.int_mask = np.all(np.isclose(X_np, np.round(X_np)), axis=0)
+        self.upper = X_np.max(axis=0)
+        counts = np.bincount(y_np, minlength=self.num_classes).astype(float)
+        self.class_prior = counts / counts.sum()
+
         # Chuẩn hóa StandardScaler
         self.scaler = StandardScaler()
-        X_scaled = self.scaler.fit_transform(X_train)
+        X_scaled = self.scaler.fit_transform(X_np)
 
         X_t = torch.tensor(X_scaled, dtype=torch.float32)
-        y_t = torch.tensor(np.array(y_train), dtype=torch.long)
+        y_t = torch.tensor(y_np, dtype=torch.long)
 
         dataset = TensorDataset(X_t, y_t)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        # BUG CŨ: drop_last=True với tập nhỏ (< batch_size, vd. few-shot) -> 0 batch, GAN không học.
+        batch_size = int(min(batch_size, len(dataset)))
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
+                                drop_last=len(dataset) > batch_size)
+        _print = print if verbose else (lambda *a, **k: None)
 
-        print(f"\n🚀 Khởi động huấn luyện CWGAN-GP trên {self.device.upper()}...", flush=True)
-        print(f"   • Số mẫu train: {len(X_train):,} | Số đặc trưng: {self.num_features} | Số lớp: {self.num_classes}", flush=True)
-        print(f"   • Số Epochs: {epochs} | Batch size: {batch_size} | Critic ratio: {n_critic}:1", flush=True)
+        _print(f"\n🚀 Khởi động huấn luyện CWGAN-GP trên {self.device.upper()}...", flush=True)
+        _print(f"   • Số mẫu train: {len(X_np):,} | Số đặc trưng: {self.num_features} | Số lớp: {self.num_classes}", flush=True)
+        _print(f"   • Số Epochs: {epochs} | Batch size: {batch_size} | Critic ratio: {n_critic}:1", flush=True)
 
         t0 = time.time()
         for epoch in range(1, epochs + 1):
@@ -218,7 +234,8 @@ class TabularCWGAN_GP:
                 # ------------------------
                 self.opt_g.zero_grad()
                 z = torch.randn(cur_batch_size, self.z_dim, device=self.device)
-                gen_labels = torch.randint(0, self.num_classes, (cur_batch_size,), device=self.device)
+                # Dùng nhãn của batch thật để generator và critic được huấn luyện trên cùng phân phối điều kiện
+                gen_labels = batch_y
                 fake_x = self.generator(z, gen_labels)
                 fake_scores = self.critic(fake_x, gen_labels)
 
@@ -237,19 +254,21 @@ class TabularCWGAN_GP:
 
             if epoch % verbose_every == 0 or epoch == 1 or epoch == epochs:
                 elapsed = time.time() - t0
-                print(f"   [Epoch {epoch:3d}/{epochs:3d}] ({elapsed:.1f}s) -> "
+                _print(f"   [Epoch {epoch:3d}/{epochs:3d}] ({elapsed:.1f}s) -> "
                       f"Critic Loss: {mean_c:+.4f} | Gen Loss: {mean_g:+.4f} | W-Dist: {mean_w:+.4f}", flush=True)
 
         total_time = time.time() - t0
-        print(f"✅ Hoàn tất huấn luyện CWGAN-GP trong {total_time:.1f}s ({total_time/60:.2f} phút)!", flush=True)
+        _print(f"✅ Hoàn tất huấn luyện CWGAN-GP trong {total_time:.1f}s ({total_time/60:.2f} phút)!", flush=True)
 
-    def generate(self, class_counts_dict):
+    def generate(self, class_counts_dict, seed=None):
         """
         Sinh mẫu dữ liệu nhân tạo theo số lượng chỉ định cho từng lớp.
         class_counts_dict: dict {class_idx: num_samples_to_generate}
         Trả về: DataFrame (X_synth) và Series (y_synth) ở tỷ lệ gốc ban đầu.
         """
         self.generator.eval()
+        if seed is not None:
+            torch.manual_seed(seed)
         all_synth_x = []
         all_synth_y = []
 
@@ -275,14 +294,21 @@ class TabularCWGAN_GP:
                 all_synth_y.extend([c_idx] * count)
 
         if not all_synth_x:
-            return pd.DataFrame(), pd.Series()
+            return pd.DataFrame(columns=self.feature_names), pd.Series(dtype=int, name='Label')
 
         all_synth_x = np.vstack(all_synth_x)
         # Nghịch đảo chuẩn hóa về không gian đặc trưng thực tế
         real_scale_x = self.scaler.inverse_transform(all_synth_x)
 
-        # Chặn các đặc trưng không âm (counts, proportions)
-        real_scale_x = np.clip(real_scale_x, a_min=0.0, a_max=None)
+        # Ràng buộc miền giá trị hợp lệ: không âm, không vượt max quan sát trên train,
+        # cột tỷ lệ '*_avg' nằm trong [0, 1], cột đếm được làm tròn về số nguyên.
+        real_scale_x = np.clip(real_scale_x, 0.0, self.upper)
+        if self.feature_names is not None:
+            for j, name in enumerate(self.feature_names):
+                if str(name).endswith('_avg'):
+                    real_scale_x[:, j] = np.clip(real_scale_x[:, j], 0.0, 1.0)
+        if self.int_mask is not None:
+            real_scale_x[:, self.int_mask] = np.round(real_scale_x[:, self.int_mask])
 
         df_synth_x = pd.DataFrame(real_scale_x, columns=self.feature_names)
         s_synth_y = pd.Series(all_synth_y, name='Label')
@@ -300,13 +326,17 @@ class TabularCWGAN_GP:
             'num_features': self.num_features,
             'num_classes': self.num_classes,
             'z_dim': self.z_dim,
+            'int_mask': self.int_mask,
+            'upper': self.upper,
+            'class_prior': self.class_prior,
             'training_history': self.training_history
         }, path)
         print(f"💾 Đã lưu checkpoint GAN tại: {path}")
 
     def load_checkpoint(self, path):
         """Nạp trọng số mô hình."""
-        ckpt = torch.load(path, map_location=self.device)
+        # weights_only=False: checkpoint chứa StandardScaler (torch>=2.6 mặc định weights_only=True -> lỗi)
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
         self.generator.load_state_dict(ckpt['generator_state'])
         self.critic.load_state_dict(ckpt['critic_state'])
         self.scaler = ckpt['scaler']
@@ -314,6 +344,9 @@ class TabularCWGAN_GP:
         self.num_features = ckpt['num_features']
         self.num_classes = ckpt['num_classes']
         self.z_dim = ckpt['z_dim']
+        self.int_mask = ckpt.get('int_mask')
+        self.upper = ckpt.get('upper')
+        self.class_prior = ckpt.get('class_prior')
         self.training_history = ckpt.get('training_history', {})
         print(f"📖 Đã nạp checkpoint GAN từ: {path}")
 
@@ -321,7 +354,8 @@ class TabularCWGAN_GP:
 # -----------------------------------------------------------------------------
 # 3. HÀM ĐÁNH GIÁ CHẤT LƯỢNG MẪU SINH BẰNG GAN (FID / PCA / CORRELATION)
 # -----------------------------------------------------------------------------
-def evaluate_gan_quality(X_real, y_real, X_synth, y_synth, label_mapping, output_dir="new feature/results"):
+def evaluate_gan_quality(X_real, y_real, X_synth, y_synth, label_mapping, output_dir="new feature/results",
+                         tag=None):
     """
     Đánh giá chất lượng dữ liệu sinh bằng GAN:
     1. So sánh ma trận tương quan giữa dữ liệu thật và dữ liệu sinh (Frobenius norm diff).
@@ -350,6 +384,10 @@ def evaluate_gan_quality(X_real, y_real, X_synth, y_synth, label_mapping, output
     print(f"   • Sai số tuyệt đối trung bình giữa các thuộc tính (Mean MAE): {mean_mae:.4f}")
 
     # 3. Trực quan hóa PCA 2D
+    # PCA trên dữ liệu đã chuẩn hóa (dữ liệu thô bị chi phối bởi cột có biên độ lớn)
+    sc = StandardScaler().fit(X_real)
+    X_real = pd.DataFrame(sc.transform(X_real), columns=X_real.columns)
+    X_synth = pd.DataFrame(sc.transform(X_synth[X_real.columns]), columns=X_real.columns)
     pca = PCA(n_components=2, random_state=42)
     pca.fit(X_real)
     pca_real = pca.transform(X_real.sample(min(3000, len(X_real)), random_state=42))
@@ -372,7 +410,7 @@ def evaluate_gan_quality(X_real, y_real, X_synth, y_synth, label_mapping, output
     plt.legend()
 
     plt.tight_layout()
-    pca_plot_path = os.path.join(output_dir, "gan_pca_real_vs_synth.png")
+    pca_plot_path = os.path.join(output_dir, f"gan_pca_real_vs_synth{'_' + tag if tag else ''}.png")
     plt.savefig(pca_plot_path, dpi=200)
     plt.close()
     print(f"   📈 Đã lưu biểu đồ PCA so sánh tại: {pca_plot_path}")

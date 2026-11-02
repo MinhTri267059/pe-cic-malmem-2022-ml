@@ -8,12 +8,16 @@ Mô-đun Huấn luyện Học vài mẫu (Few-Shot Learning) trên 22 đặc tr�
 
 import os
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 import time
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -22,11 +26,10 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
 
 
 # -----------------------------------------------------------------------------
@@ -101,7 +104,7 @@ class PrototypicalNetwork(nn.Module):
         return log_probs
 
     def fit_episodic(self, X_train, y_train, n_way=4, k_shot=5, n_query=15,
-                     n_episodes=400, lr=1e-3, verbose_every=100):
+                     n_episodes=400, lr=1e-3, verbose_every=100, verbose=True):
         """
         Huấn luyện ProtoNet bằng chiến lược mô phỏng Episode (Meta-training).
         """
@@ -112,8 +115,10 @@ class PrototypicalNetwork(nn.Module):
         classes = np.unique(y_train)
         class_to_indices = {c: np.where(y_train == c)[0] for c in classes}
 
-        print(f"\n🧠 Huấn luyện Prototypical Network (ProtoNet) trên {self.device.upper()}...")
-        print(f"   • Episodic Setup: {n_way}-way {k_shot}-shot ({n_query} queries/class) | {n_episodes} episodes")
+        _print = print if verbose else (lambda *a, **k: None)
+        n_way = min(n_way, len(classes))
+        _print(f"\n🧠 Huấn luyện Prototypical Network (ProtoNet) trên {self.device.upper()}...")
+        _print(f"   • Episodic Setup: {n_way}-way {k_shot}-shot ({n_query} queries/class) | {n_episodes} episodes")
 
         t0 = time.time()
         history = []
@@ -127,9 +132,14 @@ class PrototypicalNetwork(nn.Module):
 
             for new_c_idx, c in enumerate(selected_classes):
                 idx = class_to_indices[c]
-                chosen = np.random.choice(idx, size=k_shot + n_query, replace=(len(idx) < k_shot + n_query))
-                supp_idx = chosen[:k_shot]
-                q_idx = chosen[k_shot:]
+                perm = np.random.permutation(idx)
+                if len(perm) >= k_shot + n_query:
+                    supp_idx, q_idx = perm[:k_shot], perm[k_shot:k_shot + n_query]
+                else:  # lớp quá ít mẫu: chia đôi, query không trùng support
+                    cut = max(1, min(k_shot, len(perm) - 1))
+                    supp_idx = np.random.choice(perm[:cut], size=k_shot, replace=True)
+                    q_pool = perm[cut:] if len(perm) > cut else perm[:cut]
+                    q_idx = np.random.choice(q_pool, size=n_query, replace=True)
 
                 support_x_list.append(X_train[supp_idx])
                 support_y_list.extend([new_c_idx] * k_shot)
@@ -155,9 +165,17 @@ class PrototypicalNetwork(nn.Module):
             if ep % verbose_every == 0 or ep == 1:
                 recent_loss = np.mean([h[0] for h in history[-verbose_every:]])
                 recent_acc = np.mean([h[1] for h in history[-verbose_every:]])
-                print(f"   [Episode {ep:3d}/{n_episodes}] Loss: {recent_loss:.4f} | Accuracy: {recent_acc*100:.2f}%")
+                _print(f"   [Episode {ep:3d}/{n_episodes}] Loss: {recent_loss:.4f} | Accuracy: {recent_acc*100:.2f}%")
 
-        print(f"✅ Hoàn tất huấn luyện ProtoNet trong {time.time() - t0:.1f}s!")
+        _print(f"✅ Hoàn tất huấn luyện ProtoNet trong {time.time() - t0:.1f}s!")
+
+    def predict(self, support_x, support_y, query_x, n_way):
+        self.eval()
+        with torch.no_grad():
+            sx = torch.tensor(np.asarray(support_x), dtype=torch.float32, device=self.device)
+            sy = torch.tensor(np.asarray(support_y), dtype=torch.long, device=self.device)
+            qx = torch.tensor(np.asarray(query_x), dtype=torch.float32, device=self.device)
+            return self.forward(sx, sy, qx, n_way).argmax(dim=1).cpu().numpy()
 
     def evaluate_fewshot(self, support_x, support_y, query_x, query_y, n_way):
         """Đánh giá 1 tập few-shot cố định."""
@@ -202,15 +220,17 @@ class SiameseNetwork(nn.Module):
         return dist
 
     def fit_pairs(self, X_train, y_train, n_pairs=10000, margin=1.0, epochs=20,
-                  batch_size=256, lr=1e-3, verbose_every=5):
+                  batch_size=256, lr=1e-3, verbose_every=5, verbose=True):
         """
         Huấn luyện Siamese Network bằng các cặp mẫu (Pairwise Contrastive Training).
         """
         self.train()
         optimizer = optim.Adam(self.parameters(), lr=lr, weight_decay=1e-4)
+        y_train = np.asarray(y_train)
 
         # Tạo tập các cặp (x1, x2, label: 1=cùng lớp, 0=khác lớp)
-        print(f"\n🧬 Tạo {n_pairs:,} cặp mẫu huấn luyện cho Siamese Network...")
+        _print = print if verbose else (lambda *a, **k: None)
+        _print(f"\n🧬 Tạo {n_pairs:,} cặp mẫu huấn luyện cho Siamese Network...")
         classes = np.unique(y_train)
         class_to_indices = {c: np.where(y_train == c)[0] for c in classes}
 
@@ -238,7 +258,7 @@ class SiameseNetwork(nn.Module):
         dataset = TensorDataset(t_x1, t_x2, t_y)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        print(f"🚀 Huấn luyện Siamese Network với Contrastive Loss (Margin={margin})...")
+        _print(f"🚀 Huấn luyện Siamese Network với Contrastive Loss (Margin={margin})...")
         t0 = time.time()
         for ep in range(1, epochs + 1):
             ep_loss = []
@@ -254,9 +274,16 @@ class SiameseNetwork(nn.Module):
                 ep_loss.append(loss.item())
 
             if ep % verbose_every == 0 or ep == 1:
-                print(f"   [Epoch {ep:2d}/{epochs:2d}] Contrastive Loss: {np.mean(ep_loss):.4f}")
+                _print(f"   [Epoch {ep:2d}/{epochs:2d}] Contrastive Loss: {np.mean(ep_loss):.4f}")
 
-        print(f"✅ Hoàn tất huấn luyện Siamese Network trong {time.time() - t0:.1f}s!")
+        _print(f"✅ Hoàn tất huấn luyện Siamese Network trong {time.time() - t0:.1f}s!")
+
+    def predict_nn(self, support_x, support_y, query_x):
+        self.eval()
+        with torch.no_grad():
+            s_emb = self.forward_one(torch.tensor(np.asarray(support_x), dtype=torch.float32, device=self.device))
+            q_emb = self.forward_one(torch.tensor(np.asarray(query_x), dtype=torch.float32, device=self.device))
+            return np.asarray(support_y)[torch.cdist(q_emb, s_emb).argmin(dim=1).cpu().numpy()]
 
     def classify_by_nearest_neighbor(self, support_x, support_y, query_x, query_y):
         """Phân loại 1-NN trong không gian embedding của Siamese Network."""
@@ -278,187 +305,131 @@ class SiameseNetwork(nn.Module):
         return acc, macro_f1, macro_rec
 
 
+# 4. FEW-SHOT BENCHMARK KHÔNG RÒ RỈ (MỌI PHƯƠNG PHÁP CHỈ THẤY K MẪU/LỚP)
 # -----------------------------------------------------------------------------
-# 4. GAN-ASSISTED FEW-SHOT BENCHMARK
-# -----------------------------------------------------------------------------
+def _sample_support(y, groups, classes, k, rng):
+    """Chọn K mẫu/lớp, mỗi mẫu đến từ một SampleID KHÁC NHAU (đa dạng, không lặp dump)."""
+    idx = []
+    for c in classes:
+        cand = np.where(y == c)[0]
+        g = groups[cand]
+        ug = rng.permutation(np.unique(g))[:k]
+        for gg in ug:
+            idx.append(rng.choice(cand[g == gg]))
+    return np.array(idx)
+
+
+def _metrics(y_true, pred):
+    return accuracy_score(y_true, pred), f1_score(y_true, pred, average='macro', zero_division=0)
+
+
 def benchmark_fewshot_with_gan(X_train_df, y_train_s, X_test_df, y_test_s,
-                              gan_model, k_shots=[5, 10, 20, 50],
-                              n_gan_augment_per_class=100, n_runs=5,
-                              output_dir="new feature/results"):
+                               gan_model=None, k_shots=(5, 10, 20, 50),
+                               n_gan_augment_per_class=100, n_runs=5,
+                               output_dir="new feature/results", groups_train=None,
+                               gan_epochs=150, tag=None):
     """
-    So sánh toàn diện giữa:
-    1. Baseline Few-Shot (chỉ dùng K mẫu thật).
-    2. GAN-Enriched Few-Shot (K mẫu thật + mẫu sinh bởi GAN).
-    3. Prototypical Network.
-    4. Siamese Network (1-NN Metric).
+    Đối sánh Few-Shot KHÔNG RÒ RỈ (sửa lỗi phiên bản cũ):
+      - Phiên bản cũ tiền huấn luyện ProtoNet/Siamese/GAN trên TOÀN BỘ tập train
+        (hàng chục nghìn mẫu có nhãn) rồi gọi là "few-shot" -> rò rỉ tiền tri thức.
+      - Ở đây MỌI phương pháp (RF, XGB, GAN, ProtoNet, Siamese) chỉ thấy đúng K mẫu/lớp.
+        GAN (nếu bật) được huấn luyện lại từ đầu CHỈ trên support set của mỗi lượt.
+      - Test set được chia theo nhóm SampleID nên không chung dump với support.
+    Tham số gan_model giữ để tương thích: nếu khác None thì bật nhánh GAN-assisted.
     """
+    from gan_augmentation import TabularCWGAN_GP
     os.makedirs(output_dir, exist_ok=True)
-    classes = np.unique(y_train_s)
+    y_train = np.asarray(y_train_s).astype(int)
+    y_test = np.asarray(y_test_s).astype(int)
+    classes = np.unique(y_train)
     num_classes = len(classes)
-
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_df)
-    X_test_scaled = scaler.transform(X_test_df)
-
-    # 1. Tiền huấn luyện ProtoNet và Siamese trên tập train tổng thể
-    proto_net = PrototypicalNetwork(in_features=X_train_df.shape[1], embed_dim=32, device=gan_model.device)
-    proto_net.fit_episodic(X_train_scaled, y_train_s.values, n_way=min(4, num_classes),
-                           k_shot=5, n_query=15, n_episodes=150, lr=1e-3, verbose_every=50)
-
-    siamese_net = SiameseNetwork(in_features=X_train_df.shape[1], embed_dim=32, device=gan_model.device)
-    siamese_net.fit_pairs(X_train_scaled, y_train_s.values, n_pairs=6000, margin=1.0, epochs=10, verbose_every=5)
+    groups_train = (np.asarray(groups_train) if groups_train is not None
+                    else np.arange(len(y_train)).astype(str))
+    X_train_np = np.asarray(X_train_df, dtype=np.float64)
+    X_test_np = np.asarray(X_test_df, dtype=np.float64)
+    use_gan = gan_model is not None
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     results = []
-
     print(f"\n==================================================================")
-    print(f"🧪 THỰC HIỆN ĐỐI SÁNH FEW-SHOT LEARNING VỚI K = {k_shots}")
+    print(f"🧪 FEW-SHOT KHÔNG RÒ RỈ: K = {list(k_shots)} | {n_runs} lượt | GAN-assisted: {use_gan}")
     print(f"==================================================================")
 
-    class_indices = {c: np.where(y_train_s.values == c)[0] for c in classes}
-
     for k in k_shots:
-        print(f"\n---> Khảo sát kịch bản K = {k} mẫu/lớp ({k*num_classes} mẫu tổng cộng)...")
-
-        acc_base_rf, f1_base_rf = [], []
-        acc_base_xgb, f1_base_xgb = [], []
-        acc_gan_rf, f1_gan_rf = [], []
-        acc_gan_xgb, f1_gan_xgb = [], []
-        acc_proto, f1_proto = [], []
-        acc_siamese, f1_siamese = [], []
-
+        scores = {}
         for run in range(n_runs):
-            np.random.seed(42 + run * 13)
-            # Chọn K mẫu thật cho mỗi lớp từ train set
-            supp_indices = []
-            for c in classes:
-                avail = class_indices[c]
-                chosen = np.random.choice(avail, size=min(k, len(avail)), replace=False)
-                supp_indices.extend(chosen)
+            seed = 42 + run * 13 + k
+            rng = np.random.default_rng(seed)
+            torch.manual_seed(seed)
+            supp = _sample_support(y_train, groups_train, classes, k, rng)
+            Xs_raw, ys = X_train_np[supp], y_train[supp]
+            # Scaler fit CHỈ trên support (không dùng thống kê của tập train đầy đủ)
+            sc = StandardScaler().fit(Xs_raw)
+            Xs, Xq = sc.transform(Xs_raw), sc.transform(X_test_np)
 
-            supp_indices = np.array(supp_indices)
-            X_supp_real = X_train_scaled[supp_indices]
-            y_supp_real = y_train_s.values[supp_indices]
+            def add(name, pred):
+                scores.setdefault(name, []).append(_metrics(y_test, pred))
 
-            # ---------------------------------------------------------
-            # A. Baseline Models (Chỉ K mẫu thật)
-            # ---------------------------------------------------------
-            rf_base = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-            rf_base.fit(X_supp_real, y_supp_real)
-            p_rf = rf_base.predict(X_test_scaled)
-            acc_base_rf.append(accuracy_score(y_test_s, p_rf))
-            f1_base_rf.append(f1_score(y_test_s, p_rf, average='macro', zero_division=0))
+            add('Random Forest (Baseline)',
+                RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1).fit(Xs, ys).predict(Xq))
+            add('XGBoost (Baseline)',
+                XGBClassifier(n_estimators=150, max_depth=4, learning_rate=0.1, random_state=seed,
+                              n_jobs=-1, verbosity=0).fit(Xs, ys).predict(Xq))
+            add('Logistic Regression',
+                LogisticRegression(max_iter=2000, C=1.0).fit(Xs, ys).predict(Xq))
 
-            xgb_base = XGBClassifier(n_estimators=100, random_state=42, eval_metric='mlogloss', n_jobs=-1)
-            xgb_base.fit(X_supp_real, y_supp_real)
-            p_xgb = xgb_base.predict(X_test_scaled)
-            acc_base_xgb.append(accuracy_score(y_test_s, p_xgb))
-            f1_base_xgb.append(f1_score(y_test_s, p_xgb, average='macro', zero_division=0))
+            if use_gan:
+                gan = TabularCWGAN_GP(num_features=Xs_raw.shape[1], num_classes=num_classes,
+                                      z_dim=32, embed_dim=8, hidden_dim=128, lr=2e-4, device=device)
+                gan.fit(pd.DataFrame(Xs_raw), ys, epochs=gan_epochs, batch_size=128, n_critic=5,
+                        verbose=False)
+                Xg, yg = gan.generate({c: n_gan_augment_per_class for c in classes}, seed=seed)
+                Xa = np.vstack([Xs, sc.transform(Xg.values)])
+                ya = np.r_[ys, yg.values]
+                add('Random Forest (+GAN Augment)',
+                    RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1).fit(Xa, ya).predict(Xq))
+                add('XGBoost (+GAN Augment)',
+                    XGBClassifier(n_estimators=150, max_depth=4, learning_rate=0.1, random_state=seed,
+                                  n_jobs=-1, verbosity=0).fit(Xa, ya).predict(Xq))
 
-            # ---------------------------------------------------------
-            # B. GAN-Augmented Few-Shot (K mẫu thật + n_gan mẫu sinh)
-            # ---------------------------------------------------------
-            gan_dict = {c: n_gan_augment_per_class for c in classes}
-            df_synth_x, s_synth_y = gan_model.generate(gan_dict)
-            X_synth_scaled = scaler.transform(df_synth_x)
+            # ProtoNet: meta-train episodic CHỈ trên support set
+            proto = PrototypicalNetwork(in_features=Xs.shape[1], embed_dim=32, device=device)
+            k_s = max(1, k // 2)
+            proto.fit_episodic(Xs, ys, n_way=min(num_classes, 4), k_shot=k_s, n_query=max(1, k - k_s),
+                               n_episodes=150, lr=1e-3, verbose_every=10 ** 9, verbose=False)
+            add('Prototypical Network (ProtoNet)', proto.predict(Xs, ys, Xq, num_classes))
 
-            X_supp_aug = np.vstack([X_supp_real, X_synth_scaled])
-            y_supp_aug = np.hstack([y_supp_real, s_synth_y.values])
+            siam = SiameseNetwork(in_features=Xs.shape[1], embed_dim=32, device=device)
+            siam.fit_pairs(Xs, ys, n_pairs=min(4000, 40 * len(ys)), margin=1.0, epochs=10, verbose=False)
+            add('Siamese Network (1-NN)', siam.predict_nn(Xs, ys, Xq))
 
-            rf_gan = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-            rf_gan.fit(X_supp_aug, y_supp_aug)
-            p_rf_gan = rf_gan.predict(X_test_scaled)
-            acc_gan_rf.append(accuracy_score(y_test_s, p_rf_gan))
-            f1_gan_rf.append(f1_score(y_test_s, p_rf_gan, average='macro', zero_division=0))
-
-            xgb_gan = XGBClassifier(n_estimators=100, random_state=42, eval_metric='mlogloss', n_jobs=-1)
-            xgb_gan.fit(X_supp_aug, y_supp_aug)
-            p_xgb_gan = xgb_gan.predict(X_test_scaled)
-            acc_gan_xgb.append(accuracy_score(y_test_s, p_xgb_gan))
-            f1_gan_xgb.append(f1_score(y_test_s, p_xgb_gan, average='macro', zero_division=0))
-
-            # ---------------------------------------------------------
-            # C. Prototypical Network (Evaluation trên Support Set)
-            # ---------------------------------------------------------
-            a_proto, f_proto, _ = proto_net.evaluate_fewshot(
-                X_supp_real, y_supp_real, X_test_scaled, y_test_s.values, num_classes
-            )
-            acc_proto.append(a_proto)
-            f1_proto.append(f_proto)
-
-            # ---------------------------------------------------------
-            # D. Siamese Network 1-NN Metric
-            # ---------------------------------------------------------
-            a_siam, f_siam, _ = siamese_net.classify_by_nearest_neighbor(
-                X_supp_real, y_supp_real, X_test_scaled, y_test_s.values
-            )
-            acc_siamese.append(a_siam)
-            f1_siamese.append(f_siam)
-
-        # Ghi nhận kết quả trung bình qua n_runs
-        results.append({
-            'K_Shot': k, 'Model': 'Random Forest (Baseline)',
-            'Accuracy_Mean': np.mean(acc_base_rf), 'Accuracy_Std': np.std(acc_base_rf),
-            'Macro_F1_Mean': np.mean(f1_base_rf), 'Macro_F1_Std': np.std(f1_base_rf),
-            'Augmentation': 'None'
-        })
-        results.append({
-            'K_Shot': k, 'Model': 'Random Forest (+GAN Augment)',
-            'Accuracy_Mean': np.mean(acc_gan_rf), 'Accuracy_Std': np.std(acc_gan_rf),
-            'Macro_F1_Mean': np.mean(f1_gan_rf), 'Macro_F1_Std': np.std(f1_gan_rf),
-            'Augmentation': f'+{n_gan_augment_per_class} GAN'
-        })
-        results.append({
-            'K_Shot': k, 'Model': 'XGBoost (Baseline)',
-            'Accuracy_Mean': np.mean(acc_base_xgb), 'Accuracy_Std': np.std(acc_base_xgb),
-            'Macro_F1_Mean': np.mean(f1_base_xgb), 'Macro_F1_Std': np.std(f1_base_xgb),
-            'Augmentation': 'None'
-        })
-        results.append({
-            'K_Shot': k, 'Model': 'XGBoost (+GAN Augment)',
-            'Accuracy_Mean': np.mean(acc_gan_xgb), 'Accuracy_Std': np.std(acc_gan_xgb),
-            'Macro_F1_Mean': np.mean(f1_gan_xgb), 'Macro_F1_Std': np.std(f1_gan_xgb),
-            'Augmentation': f'+{n_gan_augment_per_class} GAN'
-        })
-        results.append({
-            'K_Shot': k, 'Model': 'Prototypical Network (ProtoNet)',
-            'Accuracy_Mean': np.mean(acc_proto), 'Accuracy_Std': np.std(acc_proto),
-            'Macro_F1_Mean': np.mean(f1_proto), 'Macro_F1_Std': np.std(f1_proto),
-            'Augmentation': 'Metric Embed'
-        })
-        results.append({
-            'K_Shot': k, 'Model': 'Siamese Network (1-NN)',
-            'Accuracy_Mean': np.mean(acc_siamese), 'Accuracy_Std': np.std(acc_siamese),
-            'Macro_F1_Mean': np.mean(f1_siamese), 'Macro_F1_Std': np.std(f1_siamese),
-            'Augmentation': 'Contrastive Metric'
-        })
-
-        delta_f1_rf = (np.mean(f1_gan_rf) - np.mean(f1_base_rf)) * 100
-        delta_f1_xgb = (np.mean(f1_gan_xgb) - np.mean(f1_base_xgb)) * 100
-        print(f"   ✓ K={k:2d} | RF: {np.mean(f1_base_rf)*100:.2f}% -> +GAN: {np.mean(f1_gan_rf)*100:.2f}% (Delta: {delta_f1_rf:+.2f}%)")
-        print(f"   ✓ K={k:2d} | XGB: {np.mean(f1_base_xgb)*100:.2f}% -> +GAN: {np.mean(f1_gan_xgb)*100:.2f}% (Delta: {delta_f1_xgb:+.2f}%)")
-        print(f"   ✓ K={k:2d} | ProtoNet F1: {np.mean(f1_proto)*100:.2f}% | Siamese F1: {np.mean(f1_siamese)*100:.2f}%")
+        for name, vals in scores.items():
+            accs, f1s = np.array(vals).T
+            results.append({'K_Shot': k, 'Model': name,
+                            'Accuracy_Mean': accs.mean(), 'Accuracy_Std': accs.std(),
+                            'Macro_F1_Mean': f1s.mean(), 'Macro_F1_Std': f1s.std(),
+                            'Augmentation': (f'+{n_gan_augment_per_class} GAN (train trên support)'
+                                             if 'GAN' in name else 'None'),
+                            'Protocol': 'support-only, group-disjoint test'})
+            print(f"   K={k:3d} | {name:34s} Acc {accs.mean()*100:6.2f}±{accs.std()*100:4.2f}% "
+                  f"| F1 {f1s.mean()*100:6.2f}±{f1s.std()*100:4.2f}%", flush=True)
 
     res_df = pd.DataFrame(results)
-    out_csv = os.path.join(output_dir, "fewshot_benchmark_results.csv")
-    res_df.to_csv(out_csv, index=False)
-    print(f"\n✅ Đã lưu kết quả thực nghiệm Few-Shot vào: {out_csv}")
+    suffix = f"_{tag}" if tag else ""
+    res_df.to_csv(os.path.join(output_dir, f"fewshot_benchmark_results{suffix}.csv"), index=False)
 
-    # Vẽ biểu đồ đường xu hướng K-shot
     plt.figure(figsize=(9, 5))
-    for m in ['Random Forest (Baseline)', 'Random Forest (+GAN Augment)',
-              'XGBoost (Baseline)', 'XGBoost (+GAN Augment)', 'Prototypical Network (ProtoNet)']:
+    for m in res_df['Model'].unique():
         sub = res_df[res_df['Model'] == m]
-        plt.plot(sub['K_Shot'], sub['Macro_F1_Mean'] * 100, marker='o', label=m)
-
-    plt.title('Hiệu quả Few-Shot Learning theo số mẫu K (Macro-F1)', fontsize=12)
-    plt.xlabel('Số mẫu K trên mỗi lớp (K-Shot)')
-    plt.ylabel('Macro-F1 Score (%)')
+        plt.errorbar(sub['K_Shot'], sub['Macro_F1_Mean'] * 100, yerr=sub['Macro_F1_Std'] * 100,
+                     marker='o', capsize=3, label=m)
+    plt.title(f'Few-Shot (không rò rỉ) theo K – Macro-F1 {tag or ""}', fontsize=12)
+    plt.xlabel('K mẫu / lớp')
+    plt.ylabel('Macro-F1 (%)')
+    plt.xscale('log')
     plt.grid(True, linestyle='--', alpha=0.5)
-    plt.legend()
+    plt.legend(fontsize=8)
     plt.tight_layout()
-    chart_path = os.path.join(output_dir, "fewshot_learning_curve.png")
-    plt.savefig(chart_path, dpi=200)
+    plt.savefig(os.path.join(output_dir, f"fewshot_learning_curve{suffix}.png"), dpi=150)
     plt.close()
-    print(f"📈 Đã lưu biểu đồ đường Few-Shot tại: {chart_path}")
-
     return res_df
