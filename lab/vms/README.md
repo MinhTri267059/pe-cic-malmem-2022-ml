@@ -37,7 +37,25 @@ và chạy từ thư mục instance tương ứng (để Vagrant/VBoxManage th�
   idle/browser_tabs/notepad_explorer/many_cmd_windows/powershell_busy × 10),
   đã trích xuất bằng `extract_features.py` → `win10_legacy/features.csv`
   (50 dòng, 0 lỗi, tất cả Class=Benign đúng). File `.raw` (106GB) đã xóa.
-- **win10_22h2, win11, win7: CHƯA bắt đầu.** Chưa tải box nào.
+- **win10_22h2: BOOT ĐƯỢC, NHƯNG DỮ LIỆU CHƯA DÙNG ĐƯỢC.** Box
+  `gusztavvargadr/windows-10-22h2-enterprise` (UEFI, không có Guest Additions) lúc đầu
+  không boot (màn hình 0x0, dump RAM không có `ntoskrnl`). Sửa bằng
+  `VBoxManage modifyvm Win10_22H2_Mem --usb-xhci on --graphicscontroller vmsvga --vram 128`
+  (chưa tách được giữa USB và đồ họa là nguyên nhân; nạp NVRAM Secure Boot không giúp).
+  Khi boot, cả Vol2 (profile `Win10x64_19041`) lẫn Vol3 2.28.2 đều chạy `pslist`.
+  Snapshot `clean_base_state` đã có; thu bằng
+  `collect_benign.py --profiles idle --no-guest` (không mở được app vì thiếu Guest Additions).
+  **Vấn đề:** build 19045 lệch profile 19041 nên Vol2 báo `Cannot find nt!ObGetObjectType`,
+  làm `psxview` và `handles` hỏng ở 8/10 dòng, và 1 dòng bất thường (18 process thay vì
+  47–59); do đó **không giữ CSV 22H2 làm dữ liệu huấn luyện**. Windows Defender còn
+  cách ly 9/20 dump RAM thô (cùng một ThreatID) nên chỉ trích xuất được 11 dump.
+  Hướng khả thi còn lại: viết bộ trích xuất bằng Vol3 (đã cài tại
+  `C:\Users\ADMIN\tools\vol3env`, có đủ 9 plugin kể cả `windows.psxview`).
+- **win11:** cùng nhà phát hành box (EFI), chưa thử; nhiều khả năng gặp lỗi tương tự.
+- **win7:** `ferventcoder/win7pro-x64-nocm-lite` còn metadata nhưng file box trả 404.
+  Ứng viên thay: `designerror/windows-7` v1.0 (2015, tài khoản lạ, chưa tải).
+- **Lưu ý quan trọng:** chỉ thu Benign trên nhiều OS không phá được confound (xem
+  `EDA_Report.md` mục 5.4); mỗi máy cần cả Benign lẫn Malware.
 
 ### Bẫy đã gặp khi chạy extract_features.py (Python 2.7 / Volatility 2)
 

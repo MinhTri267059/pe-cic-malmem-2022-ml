@@ -176,3 +176,47 @@ Sau khi loại bỏ, model chỉ chuyển sang bám vào đặc trưng rò rỉ 
    - **MalVol-25** (Dunsin et al., 2025) — cặp snapshot sạch/nhiễm từ nhiều môi trường VM khác nhau, có trên IEEE DataPort (DOI: [10.21227/kg5b-nf37](https://dx.doi.org/10.21227/kg5b-nf37)).
    - **BCCC-MalMem-SnapLog-2025** (York University) — 8 loại mã độc, snapshot theo khoảng thời gian, nhưng mất cân bằng nặng (250 Benign / 2.000 Malware).
 3. **Domain adaptation**: chuẩn hóa đặc trưng hệ thống theo độ lệch so với baseline riêng của từng máy/phiên thu thập (nếu có đủ dữ liệu theo nhóm), thay vì dùng giá trị tuyệt đối.
+
+### 5.4 Kết quả thực nghiệm với dữ liệu lab tự thu (`lab_generalization_experiment.py`)
+
+**Dữ liệu lab:** 50 dump Benign thu trên VM Win10 build 19041 (5 profile ứng dụng × 10 dump; 49 dòng dùng được vì 1 dump lỗi plugin `handles`) + 31 dòng Malware từ `demo test/` (bỏ mẫu `cleanx86` vì nhãn mơ hồ). Chia train/test theo nhóm `Category` để không rò rỉ giữa các dump của cùng một mẫu.
+
+**Phát hiện 1 – Model gốc xếp 100% dữ liệu lab vào Benign.** Huấn luyện chỉ trên MalMem2022 (kịch bản A) cho Benign recall = 1,00 và Malware recall = 0,00. Đây là đảo chiều so với giả định ban đầu ("dự đoán sai toàn bộ"): máy lab không giống máy nào của MalMem2022 nên rơi vào vùng mà model coi là Benign.
+
+**Phát hiện 2 – Dữ liệu demo gồm hai loại máy khác nhau, gây ra kết quả 100% giả.**
+
+| Nguồn | Số dòng | `svcscan.nservices` | `pslist.nproc` | `handles.nhandles` |
+| :--- | :---: | :---: | :---: | :---: |
+| Benign tự thu (x64) + Maze + 180solutions | 60 | 633 | 77–87 | ~30.000 |
+| `features_x86_candidates.csv` (Reconyc, Refroso) | 20 | 510 | ~48 | ~18.500 |
+
+Huấn luyện chỉ trên dữ liệu lab (kịch bản C) cho 100%/100% ngay cả khi loại `svcscan`, nhưng chỉ vì 20/31 Malware nằm ở máy x86: model nhận ra *máy*, không nhận ra *mã độc*. Đây chính là confound của mục 5.1 xuất hiện lại.
+
+**Phát hiện 3 – Trên tập cùng máy x64 (49 Benign vs 11 Malware, 7 nhóm), mọi cách đều phát hiện 0% Malware** (A, B, C, D; có/không `svcscan`; trọng số lab 1 hoặc 50). Thí nghiệm này **thiếu sức mạnh thống kê**: chỉ có 2 nhóm Malware cùng máy (Maze 10 dòng, 180solutions 1 dòng), nên khi giữ một nhóm làm test thì phần train gần như không còn Malware nào của máy lab. Kết quả cho thấy dữ liệu hiện có chưa đủ để kết luận, không phải bằng chứng rằng domain adaptation vô dụng.
+
+**Hệ quả cho kế hoạch thu thập (sửa lại mục 5.3.1):** thu thêm *chỉ Benign* trên nhiều OS không phá được confound, vì model sẽ học "máy lạ ⇒ Benign". Mỗi máy/OS phải đóng góp **cả hai lớp**: Benign và ít nhất vài họ Malware chạy trên cùng snapshot. Việc chạy Malware nằm trong quy trình cô lập của `lab/run_sample.py` và cần mẫu do nhóm cung cấp.
+
+### 5.5 Thử sinh dữ liệu lab bằng CWGAN-GP (`lab_gan_experiment.py`, `lab_gan_control.py`)
+
+**Thiết lập chống rò rỉ:** (L1) chia fold theo nhóm `Category` trước mọi bước, có `assert` không trùng nhóm; (L2) GAN và scaler của nó chỉ fit trên lab-train của fold đó; (L3) mẫu sinh (200/lớp) chỉ vào train, test luôn là dòng thật chưa thấy; (L4) kiểm tra ghi nhớ bằng khoảng cách láng giềng gần nhất (chuẩn hóa) và tỉ lệ mẫu sinh trùng dòng train; (L5) đối chứng nhân bản mẫu thật cùng số lượng. 2 seed, trung bình.
+
+| Tập | Kịch bản | Benign recall | Malware recall |
+| :--- | :--- | :---: | :---: |
+| Cùng máy x64 (49 B / 11 M) | S0 chỉ lab | 0,918 | 0,000 |
+| | S1 lab + nhân bản | 0,918 | 0,000 |
+| | **S2 lab + GAN** | 0,929 | **0,955** |
+| | S3 MalMem + lab | 0,929 | 0,045 |
+| | S4 MalMem + lab + GAN | 0,929 | 0,500 |
+| Đối chứng (cùng tập) | S5 nhiễu Gaussian σ=0,5 | 0,959 | 0,045 |
+| | **S5 nhiễu Gaussian σ=1,0** | 1,000 | **0,955** |
+| | S6 IsolationForest chỉ học Benign | 0,378 | 1,000 |
+| Tất cả lab (nhiễm confound máy) | S0 = S1 = S2 | 0,990 | 0,984 |
+| | S3 = S4 | 1,000 | 0,645 |
+
+**Rò rỉ:** không phát hiện. Không có mẫu sinh nào trùng dòng train (0,0%). Tuy vậy mẫu sinh nằm gần train (khoảng cách NN 1,65) hơn nhiều so với dòng test thật (6,55), tức GAN bám sát những gì nó đã thấy.
+
+**Diễn giải:** con số 0,955 của S2 **không phải bằng chứng GAN tổng quát hóa**. Nhiễu Gaussian σ=1,0 đạt đúng kết quả đó, còn σ=0,5 thì thất bại, nghĩa là cái giúp được chỉ là *độ rộng* của vùng Malware giả (mô hình coi mọi thứ lạ so với Benign là Malware, giống phát hiện bất thường), không phải cấu trúc mã độc mà GAN học được. Khi giữ Maze làm test, train chỉ còn 1 dòng Malware (180solutions) nên GAN không thể học họ chưa thấy. Với 11 dòng/2 nhóm, mọi con số ở đây có phương sai rất lớn. Trên tập có confound máy, GAN không thêm gì (S2 = S0). Trộn thêm MalMem2022 làm S3/S4 kém đi so với chỉ lab, vì mô hình lại bị kéo về miền MalMem.
+
+**Kết luận:** GAN không thay thế được việc thu Malware thật trên cùng máy. Pipeline GAN 22 đặc trưng trên MalMem2022 của nhóm (`train_with_gan.py`) không được chạy lại ở đây.
+
+**Ghi chú dữ liệu:** XGBoost nhận NaN mà không báo lỗi, nên dump có plugin lỗi (một dump `Benign-idle` thiếu toàn bộ cột `handles.*`) phải loại bỏ tường minh trước khi huấn luyện.

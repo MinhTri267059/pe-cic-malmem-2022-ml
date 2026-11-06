@@ -93,8 +93,9 @@ def collect_one(lab: Lab, label: str, profile: str):
         lab.pause(f"[{label}] verify the VM has no network path")
         lab.verify_isolation()
 
-        print(f"Opening apps (profile: {profile})...")
-        open_apps(lab, profile)
+        if not a.no_guest:
+            print(f"Opening apps (profile: {profile})...")
+            open_apps(lab, profile)
         print(f"Letting the system settle for {a.settle}s before the first dump...")
         time.sleep(a.settle)
 
@@ -129,12 +130,16 @@ def parse_args():
     p.add_argument("--output", default=str(LAB_DIR / "dumps"), help="dump directory")
     p.add_argument("--vm", required=True, help="VM name (e.g. Win10Legacy_Mem)")
     p.add_argument("--snapshot", default="clean_base_state", help="clean snapshot name")
+    p.add_argument("--no-guest", action="store_true",
+                    help="box không có Guest Additions: bỏ bước mở app, chỉ chụp trạng thái sau restore (dùng với --profiles idle)")
     p.add_argument("--guest-user", default="vagrant")
     p.add_argument("--boot-wait", type=int, default=300)
     a = p.parse_args()
     a.guest_password = os.environ.get("VBOX_GUEST_PASSWORD", "vagrant")
     if min(a.count, a.interval, a.settle, a.boot_wait) < 1:
         p.error("--count, --interval, --settle and --boot-wait must be positive")
+    if a.no_guest and a.profiles != ["idle"]:
+        p.error("--no-guest chỉ dùng được với --profiles idle")
     return a
 
 
