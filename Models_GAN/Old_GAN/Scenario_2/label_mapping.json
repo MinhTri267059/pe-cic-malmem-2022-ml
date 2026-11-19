@@ -1,0 +1,6 @@
+{
+    "Benign": 0,
+    "Ransomware": 1,
+    "Spyware": 2,
+    "Trojan": 3
+}

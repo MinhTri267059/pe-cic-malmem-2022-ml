@@ -1,0 +1,20 @@
+Metric,Value,p_value
+KS[ldrmodules.not_in_load],0.145,0.0401
+KS[ldrmodules.not_in_init],0.163,0.0144
+KS[ldrmodules.not_in_load_avg],0.08,0.5831
+KS[ldrmodules.not_in_init_avg],0.117,0.1556
+KS[malfind.ninjections],0.218,0.0003
+KS[malfind.uniqueInjections],0.313,0.0
+KS[psxview.not_in_pslist],0.051,0.9644
+KS[psxview.not_in_ethread_pool],0.107,0.235
+KS[psxview.not_in_csrss_handles],0.053,0.951
+KS[psxview.not_in_pslist_false_avg],0.25,0.0
+KS[psxview.not_in_ethread_pool_false_avg],0.142,0.047
+KS[psxview.not_in_csrss_handles_false_avg],0.073,0.6955
+DCR median (synthetic -> real),0.4307,
+NN median (real -> real khác),0.3127,
+Số mẫu trùng khớp tuyệt đối,0.0,
+Số mẫu duy nhất / 1000,1000.0,
+TSTR accuracy KB1 (train giả -> test thật),0.85,
+TSTR accuracy KB2 (train giả -> test thật),0.6,
+TSTR accuracy KB3 (train giả -> test thật),0.43,

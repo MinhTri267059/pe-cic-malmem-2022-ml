@@ -1,0 +1,19 @@
+Scenario,Model,E0: Baseline (22f Old),E1: Old+GAN (22f),E2: Unified (Clean+FullGAN 70f),E3: Arch-Adaptive (Clean+FullGAN 70f),Pipeline 3 Tầng (Arch-Adaptive 70f),Pipeline 3 Tầng (Unified 70f)
+KB1,Ensemble_XGB_RF,,,,,95.5,96.5
+KB1,J_48,92.5,91.5,95.0,94.5,94.5,95.0
+KB1,Naive_Bayes,42.5,70.5,32.5,92.5,92.5,32.5
+KB1,Random_Forest,92.0,91.5,94.5,93.5,93.5,94.5
+KB1,Random_Tree,92.5,91.0,96.5,94.0,94.0,96.5
+KB1,XGBoost,64.5,93.0,97.0,96.0,96.0,97.0
+KB2,Ensemble_XGB_RF,,,,,78.0,80.5
+KB2,J_48,49.0,59.0,73.5,71.5,75.0,75.0
+KB2,Naive_Bayes,39.0,43.5,32.5,51.0,52.0,32.5
+KB2,Random_Forest,54.5,61.5,81.5,77.5,76.0,77.5
+KB2,Random_Tree,56.0,61.0,74.5,74.5,74.0,75.5
+KB2,XGBoost,48.5,66.0,77.5,81.0,79.5,80.5
+KB3,Ensemble_XGB_RF,,,,,62.5,64.5
+KB3,J_48,39.5,49.5,58.5,56.5,59.0,62.5
+KB3,Naive_Bayes,28.0,34.5,32.5,35.0,37.5,32.5
+KB3,Random_Forest,35.0,48.5,61.0,61.0,62.0,61.0
+KB3,Random_Tree,34.5,47.0,56.0,61.0,60.5,63.0
+KB3,XGBoost,34.0,47.5,65.0,65.0,63.5,65.0

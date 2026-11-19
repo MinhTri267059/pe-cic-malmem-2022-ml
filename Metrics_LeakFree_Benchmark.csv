@@ -1,0 +1,55 @@
+Method,Scenario,Model,Test_Subset,Accuracy,Balanced_Acc,Macro_F1,Weighted_F1,Precision,Recall,FPR
+LeakFree Unified (49f+GAN),KB1,XGBoost,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,XGBoost,x64 Unseen Instances (80),75.0,63.89,56.71,79.22,86.0,75.0,36.11
+LeakFree Unified (49f+GAN),KB1,XGBoost,Combined LeakFree (160),87.5,88.69,86.02,87.84,89.2,87.5,11.31
+LeakFree Unified (49f+GAN),KB1,Random_Forest,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,Random_Forest,x64 Unseen Instances (80),78.75,65.97,59.7,81.87,86.64,78.75,34.03
+LeakFree Unified (49f+GAN),KB1,Random_Forest,Combined LeakFree (160),89.38,90.03,87.95,89.61,90.44,89.38,9.97
+LeakFree Unified (49f+GAN),KB1,Ensemble_XGB_RF,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,Ensemble_XGB_RF,x64 Unseen Instances (80),76.25,64.58,57.67,80.11,86.2,76.25,35.42
+LeakFree Unified (49f+GAN),KB1,Ensemble_XGB_RF,Combined LeakFree (160),88.12,89.14,86.66,88.43,89.6,88.12,10.86
+LeakFree Unified (49f+GAN),KB1,J_48,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,J_48,x64 Unseen Instances (80),63.75,57.64,49.02,70.94,84.32,63.75,42.36
+LeakFree Unified (49f+GAN),KB1,J_48,Combined LeakFree (160),81.88,84.67,80.46,82.56,86.05,81.88,15.33
+LeakFree Unified (49f+GAN),KB1,Random_Tree,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,Random_Tree,x64 Unseen Instances (80),58.75,60.42,47.53,66.94,85.43,58.75,39.58
+LeakFree Unified (49f+GAN),KB1,Random_Tree,Combined LeakFree (160),79.38,83.48,78.21,80.23,85.53,79.38,16.52
+LeakFree Unified (49f+GAN),KB1,Naive_Bayes,x32 Unseen Hashes (80),100.0,100.0,100.0,100.0,100.0,100.0,0.0
+LeakFree Unified (49f+GAN),KB1,Naive_Bayes,x64 Unseen Instances (80),76.25,53.47,51.76,79.26,83.03,76.25,46.53
+LeakFree Unified (49f+GAN),KB1,Naive_Bayes,Combined LeakFree (160),88.12,87.95,86.4,88.34,88.91,88.12,12.05
+LeakFree Unified (49f+GAN),KB2,XGBoost,x32 Unseen Hashes (80),77.5,66.67,66.38,78.36,81.35,77.5,6.59
+LeakFree Unified (49f+GAN),KB2,XGBoost,x64 Unseen Instances (80),61.25,59.11,57.08,64.27,71.82,61.25,12.35
+LeakFree Unified (49f+GAN),KB2,XGBoost,Combined LeakFree (160),69.38,67.06,67.35,68.47,70.45,69.38,10.43
+LeakFree Unified (49f+GAN),KB2,Random_Forest,x32 Unseen Hashes (80),65.0,52.71,44.44,61.75,62.6,65.0,10.14
+LeakFree Unified (49f+GAN),KB2,Random_Forest,x64 Unseen Instances (80),62.5,62.24,59.14,63.21,67.77,62.5,12.83
+LeakFree Unified (49f+GAN),KB2,Random_Forest,Combined LeakFree (160),63.75,60.54,59.92,61.94,65.7,63.75,12.27
+LeakFree Unified (49f+GAN),KB2,Ensemble_XGB_RF,x32 Unseen Hashes (80),76.25,65.83,64.87,77.08,81.88,76.25,6.92
+LeakFree Unified (49f+GAN),KB2,Ensemble_XGB_RF,x64 Unseen Instances (80),62.5,62.24,58.88,65.2,73.42,62.5,11.96
+LeakFree Unified (49f+GAN),KB2,Ensemble_XGB_RF,Combined LeakFree (160),69.38,66.57,66.8,68.21,71.04,69.38,10.46
+LeakFree Unified (49f+GAN),KB2,J_48,x32 Unseen Hashes (80),70.0,59.17,49.93,65.48,63.88,70.0,8.79
+LeakFree Unified (49f+GAN),KB2,J_48,x64 Unseen Instances (80),51.25,50.0,47.71,52.27,61.91,51.25,16.33
+LeakFree Unified (49f+GAN),KB2,J_48,Combined LeakFree (160),60.62,58.75,56.72,58.77,65.99,60.62,12.99
+LeakFree Unified (49f+GAN),KB2,Random_Tree,x32 Unseen Hashes (80),66.25,55.21,48.03,64.14,74.16,66.25,9.78
+LeakFree Unified (49f+GAN),KB2,Random_Tree,x64 Unseen Instances (80),47.5,52.34,46.51,48.56,54.31,47.5,17.14
+LeakFree Unified (49f+GAN),KB2,Random_Tree,Combined LeakFree (160),56.88,53.57,52.65,54.94,55.55,56.88,14.54
+LeakFree Unified (49f+GAN),KB2,Naive_Bayes,x32 Unseen Hashes (80),66.25,54.17,44.41,61.88,62.89,66.25,9.75
+LeakFree Unified (49f+GAN),KB2,Naive_Bayes,x64 Unseen Instances (80),37.5,35.68,33.87,38.92,49.09,37.5,20.57
+LeakFree Unified (49f+GAN),KB2,Naive_Bayes,Combined LeakFree (160),51.88,49.68,48.44,50.84,57.78,51.88,15.85
+LeakFree Unified (49f+GAN),KB3,XGBoost,x32 Unseen Hashes (80),67.5,41.67,38.44,66.2,67.75,67.5,2.1
+LeakFree Unified (49f+GAN),KB3,XGBoost,x64 Unseen Instances (80),25.0,23.61,12.25,23.18,26.13,25.0,5.37
+LeakFree Unified (49f+GAN),KB3,XGBoost,Combined LeakFree (160),46.25,35.89,29.4,41.97,40.81,46.25,2.48
+LeakFree Unified (49f+GAN),KB3,Random_Forest,x32 Unseen Hashes (80),57.5,20.83,17.06,55.75,55.12,57.5,2.73
+LeakFree Unified (49f+GAN),KB3,Random_Forest,x64 Unseen Instances (80),21.25,19.44,15.65,22.01,25.56,21.25,7.67
+LeakFree Unified (49f+GAN),KB3,Random_Forest,Combined LeakFree (160),39.38,20.45,16.56,37.25,36.98,39.38,2.74
+LeakFree Unified (49f+GAN),KB3,Ensemble_XGB_RF,x32 Unseen Hashes (80),67.5,41.67,39.32,66.93,69.42,67.5,2.1
+LeakFree Unified (49f+GAN),KB3,Ensemble_XGB_RF,x64 Unseen Instances (80),23.75,22.92,15.62,21.35,24.83,23.75,7.48
+LeakFree Unified (49f+GAN),KB3,Ensemble_XGB_RF,Combined LeakFree (160),45.62,35.61,30.99,41.2,41.1,45.62,2.56
+LeakFree Unified (49f+GAN),KB3,J_48,x32 Unseen Hashes (80),50.0,21.98,14.83,50.46,55.62,50.0,3.21
+LeakFree Unified (49f+GAN),KB3,J_48,x64 Unseen Instances (80),25.0,24.31,13.52,19.8,19.51,25.0,6.85
+LeakFree Unified (49f+GAN),KB3,J_48,Combined LeakFree (160),37.5,21.5,14.24,32.11,30.16,37.5,2.94
+LeakFree Unified (49f+GAN),KB3,Random_Tree,x32 Unseen Hashes (80),20.0,18.07,12.16,23.57,54.12,20.0,5.18
+LeakFree Unified (49f+GAN),KB3,Random_Tree,x64 Unseen Instances (80),22.5,21.53,13.93,22.28,25.83,22.5,6.31
+LeakFree Unified (49f+GAN),KB3,Random_Tree,Combined LeakFree (160),21.25,17.84,13.15,23.74,30.82,21.25,3.48
+LeakFree Unified (49f+GAN),KB3,Naive_Bayes,x32 Unseen Hashes (80),57.5,20.83,14.29,54.64,53.94,57.5,2.73
+LeakFree Unified (49f+GAN),KB3,Naive_Bayes,x64 Unseen Instances (80),22.5,22.22,15.31,23.24,26.67,22.5,6.29
+LeakFree Unified (49f+GAN),KB3,Naive_Bayes,Combined LeakFree (160),40.0,22.25,16.96,41.69,45.82,40.0,2.58

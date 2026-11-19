@@ -1,0 +1,18 @@
+{
+    "Benign": 0,
+    "Ransomware-Ako": 1,
+    "Ransomware-Conti": 2,
+    "Ransomware-Maze": 3,
+    "Ransomware-Pysa": 4,
+    "Ransomware-Shade": 5,
+    "Spyware-180solutions": 6,
+    "Spyware-CWS": 7,
+    "Spyware-Gator": 8,
+    "Spyware-TIBS": 9,
+    "Spyware-Transponder": 10,
+    "Trojan-Emotet": 11,
+    "Trojan-Reconyc": 12,
+    "Trojan-Refroso": 13,
+    "Trojan-Scar": 14,
+    "Trojan-Zeus": 15
+}

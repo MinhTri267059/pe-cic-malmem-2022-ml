@@ -1,0 +1,14 @@
+Metric,Value
+Mean KS Statistic (41 features),0.1372
+Median DCR (Synthetic -> Real),0.7997
+Exact Memorized Copies,0.0
+Unique Synthetic Samples / 1000,1000.0
+TSTR Held-out Test KB1 (Binary) Accuracy,89.0
+TSTR Held-out Test KB1 (Binary) Balanced Acc,63.33
+TSTR Held-out Test KB1 (Binary) Macro-F1,68.01
+TSTR Held-out Test KB2 (4 Groups) Accuracy,60.0
+TSTR Held-out Test KB2 (4 Groups) Balanced Acc,58.67
+TSTR Held-out Test KB2 (4 Groups) Macro-F1,59.03
+TSTR Held-out Test KB3 (Families) Accuracy,46.0
+TSTR Held-out Test KB3 (Families) Balanced Acc,41.52
+TSTR Held-out Test KB3 (Families) Macro-F1,41.68

@@ -1,0 +1,13 @@
+Mode,Model,T1_Binary_Acc_200,T2_EndToEnd_Acc_200,T3_EndToEnd_Acc_200,T2_Given_T1_Correct (%),T3_Given_T2_Correct (%),Consistency_T1_T2_T3 (%)
+Pipeline 3 Tầng (Unified 70f),XGBoost,97.0,80.5,65.0,75.37,69.31,100.0
+Pipeline 3 Tầng (Unified 70f),Random_Forest,94.5,77.5,61.0,74.81,67.33,100.0
+Pipeline 3 Tầng (Unified 70f),J_48,95.0,75.0,62.5,69.47,72.53,100.0
+Pipeline 3 Tầng (Unified 70f),Random_Tree,96.5,75.5,63.0,67.94,71.91,100.0
+Pipeline 3 Tầng (Unified 70f),Naive_Bayes,32.5,32.5,32.5,0.0,0.0,100.0
+Pipeline 3 Tầng (Unified 70f),Ensemble_XGB_RF,96.5,80.5,64.5,76.12,68.63,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),XGBoost,96.0,79.5,63.5,75.56,68.63,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),Random_Forest,93.5,76.0,62.0,73.68,71.43,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),J_48,94.5,75.0,59.0,70.45,65.59,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),Random_Tree,94.0,74.0,60.5,68.99,69.66,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),Naive_Bayes,92.5,52.0,37.5,40.0,46.3,100.0
+Pipeline 3 Tầng (Arch-Adaptive 70f),Ensemble_XGB_RF,95.5,78.0,62.5,74.07,69.0,100.0

@@ -1,0 +1,11 @@
+Scenario,Model,GroupKFold_Acc (%),GroupKFold_BalAcc (%),GroupKFold_MacroF1 (%)
+KB1,Random_Forest,86.88,61.4,64.52
+KB1,Ensemble_XGB_RF,86.25,66.18,68.57
+KB1,XGBoost,84.38,65.07,66.42
+KB1,J_48,76.88,60.66,59.38
+KB1,Random_Tree,80.62,62.87,62.65
+KB2,Random_Forest,57.5,56.37,56.81
+KB2,Ensemble_XGB_RF,55.62,53.6,55.59
+KB2,XGBoost,51.25,48.57,49.71
+KB2,J_48,44.38,43.9,44.19
+KB2,Random_Tree,43.12,42.83,42.54

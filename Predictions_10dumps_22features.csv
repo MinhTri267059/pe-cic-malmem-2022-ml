@@ -1,0 +1,11 @@
+Filename,KB1_True,KB1_XGB_Pred,KB1_RF_Pred,KB1_XGB_Prob,KB2_True,KB2_XGB_Pred,KB2_RF_Pred,KB2_XGB_Ransomware_Prob,KB3_True,KB3_XGB_Pred,KB3_RF_Pred,KB3_XGB_Maze_Prob
+Ransomware-Maze_dump_10_1792230202.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,28.08%,Ransomware-Maze,Ransomware-Ako,Benign,7.96%
+Ransomware-Maze_dump_1_1792230050.raw,Malware,Benign,Malware,48.05%,Ransomware,Benign,Spyware,39.45%,Ransomware-Maze,Ransomware-Ako,Benign,7.55%
+Ransomware-Maze_dump_2_1792230066.raw,Malware,Benign,Malware,48.05%,Ransomware,Benign,Spyware,39.45%,Ransomware-Maze,Ransomware-Ako,Benign,7.55%
+Ransomware-Maze_dump_3_1792230083.raw,Malware,Malware,Malware,53.25%,Ransomware,Benign,Benign,25.67%,Ransomware-Maze,Ransomware-Ako,Benign,7.83%
+Ransomware-Maze_dump_4_1792230100.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,35.24%,Ransomware-Maze,Ransomware-Ako,Benign,8.51%
+Ransomware-Maze_dump_5_1792230117.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,35.24%,Ransomware-Maze,Ransomware-Ako,Benign,8.51%
+Ransomware-Maze_dump_6_1792230133.raw,Malware,Malware,Malware,53.25%,Ransomware,Benign,Benign,25.68%,Ransomware-Maze,Ransomware-Ako,Benign,7.57%
+Ransomware-Maze_dump_7_1792230150.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,28.06%,Ransomware-Maze,Ransomware-Ako,Benign,8.59%
+Ransomware-Maze_dump_8_1792230168.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,28.06%,Ransomware-Maze,Ransomware-Ako,Benign,8.59%
+Ransomware-Maze_dump_9_1792230185.raw,Malware,Malware,Malware,54.49%,Ransomware,Benign,Benign,28.04%,Ransomware-Maze,Ransomware-Ako,Benign,8.59%
